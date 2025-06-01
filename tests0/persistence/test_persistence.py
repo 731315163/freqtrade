@@ -2351,6 +2351,7 @@ def test_recalc_trade_from_orders(fee):
     assert pytest.approx(trade.open_trade_value) == o1_trade_val + o2_trade_val + o3_trade_val
 
 
+
 @pytest.mark.usefixtures("init_persistence")
 def test_recalc_trade_from_orders_kucoin():
     # Taken from https://github.com/freqtrade/freqtrade/issues/9346
