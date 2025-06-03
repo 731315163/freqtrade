@@ -3,7 +3,7 @@
 import logging
 
 from freqtrade.constants import BuySell
-from .exchange import Exchange
+from freqtrade0.exchange import Exchange
 from freqtrade.exchange.exchange_types import FtHas
 
 

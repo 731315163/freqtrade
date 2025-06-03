@@ -2,7 +2,7 @@
 
 import logging
 
-from .exchange import Exchange
+from freqtrade0.exchange import Exchange
 from freqtrade.exchange.exchange_types import FtHas
 
 

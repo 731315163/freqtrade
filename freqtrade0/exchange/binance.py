@@ -10,15 +10,15 @@ from pandas import DataFrame
 from freqtrade.constants import DEFAULT_DATAFRAME_COLUMNS
 from freqtrade.enums import CandleType, MarginMode, PriceType, TradingMode
 from freqtrade.exceptions import DDosProtection, OperationalException, TemporaryError
-from .exchange import Exchange
-from freqtrade0.exchange.binance_public_data import (
+from freqtrade0.exchange import Exchange
+from freqtrade.exchange.binance_public_data import (
     concat_safe,
     download_archive_ohlcv,
     download_archive_trades,
 )
-from freqtrade0.exchange.common import retrier
-from freqtrade0.exchange.exchange_types import FtHas, Tickers
-from freqtrade0.exchange.exchange_utils_timeframe import timeframe_to_msecs
+from freqtrade.exchange.common import retrier
+from freqtrade.exchange.exchange_types import FtHas, Tickers
+from freqtrade.exchange.exchange_utils_timeframe import timeframe_to_msecs
 from freqtrade.misc import deep_merge_dicts, json_load
 from freqtrade.util.datetime_helpers import dt_from_ts, dt_ts
 
@@ -32,19 +32,23 @@ class Binance(Exchange):
         "stop_price_param": "stopPrice",
         "stop_price_prop": "stopPrice",
         "stoploss_order_types": {"limit": "stop_loss_limit"},
+        "stoploss_blocks_assets": True,  # By default stoploss orders block assets
         "order_time_in_force": ["GTC", "FOK", "IOC", "PO"],
         "trades_pagination": "id",
         "trades_pagination_arg": "fromId",
         "trades_has_history": True,
+        "fetch_orders_limit_minutes": None,
         "l2_limit_range": [5, 10, 20, 50, 100, 500, 1000],
         "ws_enabled": True,
     }
     _ft_has_futures: FtHas = {
         "funding_fee_candle_limit": 1000,
         "stoploss_order_types": {"limit": "stop", "market": "stop_market"},
+        "stoploss_blocks_assets": False,  # Stoploss orders do not block assets
         "order_time_in_force": ["GTC", "FOK", "IOC"],
         "tickers_have_price": False,
         "floor_leverage": True,
+        "fetch_orders_limit_minutes": 7 * 1440,  # "fetch_orders" is limited to 7 days
         "stop_price_type_field": "workingType",
         "order_props_in_contracts": ["amount", "cost", "filled", "remaining"],
         "stop_price_type_value_mapping": {

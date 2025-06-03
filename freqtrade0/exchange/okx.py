@@ -11,7 +11,7 @@ from freqtrade.exceptions import (
     RetryableOrderError,
     TemporaryError,
 )
-from .exchange import Exchange, date_minus_candles
+from freqtrade0.exchange import  date_minus_candles
 from freqtrade.exchange.common import API_RETRY_COUNT, retrier
 from freqtrade.exchange.exchange_types import CcxtOrder, FtHas
 from freqtrade.misc import safe_value_fallback2
@@ -21,6 +21,7 @@ from freqtrade.util import dt_now, dt_ts
 logger = logging.getLogger(__name__)
 
 
+from .exchange import Exchange
 class Okx(Exchange):
     """Okx exchange class.
 
@@ -44,6 +45,7 @@ class Okx(Exchange):
             PriceType.MARK: "index",
             PriceType.INDEX: "mark",
         },
+        "stoploss_blocks_assets": False,
         "ws_enabled": True,
     }
 

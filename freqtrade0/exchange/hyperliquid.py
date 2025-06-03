@@ -7,7 +7,7 @@ from datetime import datetime
 from freqtrade.constants import BuySell
 from freqtrade.enums import MarginMode, TradingMode
 from freqtrade.exceptions import ExchangeError, OperationalException
-from .exchange import Exchange
+from freqtrade0.exchange import Exchange
 from freqtrade.exchange.exchange_types import CcxtOrder, FtHas
 from freqtrade.util.datetime_helpers import dt_from_ts
 
@@ -32,6 +32,7 @@ class Hyperliquid(Exchange):
     _ft_has_futures: FtHas = {
         "stoploss_on_exchange": True,
         "stoploss_order_types": {"limit": "limit"},
+        "stoploss_blocks_assets": False,
         "stop_price_prop": "stopPrice",
         "funding_fee_timeframe": "1h",
         "funding_fee_candle_limit": 500,

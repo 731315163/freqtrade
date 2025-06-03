@@ -17,6 +17,7 @@ from freqtrade.enums import (
 )
 from freqtrade.exceptions import OperationalException
 from freqtrade.exchange import timeframe_to_minutes
+from freqtrade.persistence.trade_model import Trade
 from freqtrade.strategy.informative_decorator import (
     InformativeData,
     PopulateIndicators,
@@ -156,17 +157,17 @@ class IStrategy(freqtrade.strategy.IStrategy):
         elif "enter_short" not in dataframe.columns:
             dataframe = dataframe.rename({"buy": "enter_long", "buy_tag": "enter_tag","sell":"enter_short","sell_tag":""}, axis="columns")
         
-        
-        if side == "long" and "enter_long" in dataframe.columns and dataframe.iloc[-1]["enter_long"] == 1:
+        last_index = dataframe.index[-1]
+        if side == "long" and "enter_long" in dataframe.columns and dataframe.at[last_index,"enter_long"] == 1:
             return None
-        if side == "short" and "enter_short"  in dataframe.columns and  dataframe.iloc[-1]["enter_short"] == 1:
+        if side == "short" and "enter_short"  in dataframe.columns and  dataframe.at[last_index,"enter_short"] == 1:
             return None
         
         if side == "long":
-            dataframe.iloc[-1]["enter_long"] =1
+            dataframe.at[last_index,"enter_long"] =1
         else:
-            dataframe.iloc[-1]["enter_short"]=1
-        dataframe.iloc[-1]["enter_tag"] = tag
+            dataframe.at[last_index,"enter_short"]=1
+        dataframe.at[last_index,"enter_tag"] = tag
        
         # Test if seen this pair and last candle before.
         # always run if process_only_new_candles is set to false
@@ -207,6 +208,51 @@ class IStrategy(freqtrade.strategy.IStrategy):
         
         self.cache_dataframe(dataframe=df,pair=pair,side = side,tag=result[3])
         return result
-  
-
+    
+    def _adjust_trade_position_internal(
+        self,
+        trade: Trade,
+        current_time: datetime,
+        current_rate: float,
+        current_profit: float,
+        min_stake: float | None,
+        max_stake: float,
+        current_entry_rate: float,
+        current_exit_rate: float,
+        current_entry_profit: float,
+        current_exit_profit: float,
+        **kwargs,
+    ) -> tuple[float | None, float,str]:
+        """
+        wrapper around adjust_trade_position to handle the return value
+        """
+        resp = strategy_safe_wrapper(
+            self.adjust_trade_position, default_retval=(None,current_rate, ""), supress_error=True
+        )(
+            trade=trade,
+            current_time=current_time,
+            current_rate=current_rate,
+            current_profit=current_profit,
+            min_stake=min_stake,
+            max_stake=max_stake,
+            current_entry_rate=current_entry_rate,
+            current_exit_rate=current_exit_rate,
+            current_entry_profit=current_entry_profit,
+            current_exit_profit=current_exit_profit,
+            **kwargs,
+        )
+        resp_tuple = resp if isinstance(resp, tuple) else (resp,)
+        match resp_tuple:
+            case (stake_amount, price, order_tag):
+                result=( stake_amount, price, order_tag)
+            case (stake_amount, price_or_tag):
+                if isinstance(price_or_tag, str):
+                    result=(stake_amount, current_rate, price_or_tag)
+                else:
+                    result=(stake_amount, price_or_tag, "")
+            case (stake_amount, ):
+                result=( stake_amount, current_rate, "")
+            case _:
+                return None
+        return result
     

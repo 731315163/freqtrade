@@ -4,8 +4,8 @@ import logging
 
 from ccxt import DECIMAL_PLACES
 
-from .exchange import Exchange
-from freqtrade0.exchange.exchange_types import FtHas
+from freqtrade0.exchange import Exchange
+from freqtrade.exchange.exchange_types import FtHas
 
 
 logger = logging.getLogger(__name__)

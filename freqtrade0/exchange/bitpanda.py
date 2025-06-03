@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone
 
-from .exchange import Exchange
+from freqtrade0.exchange import Exchange
 
 
 logger = logging.getLogger(__name__)

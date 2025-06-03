@@ -9,68 +9,40 @@ from typing import Any
 
 from freqtrade.commands.cli_options import AVAILABLE_CLI_OPTIONS
 from freqtrade.constants import DEFAULT_CONFIG
-from freqtrade.commands.arguments import  ARGS_COMMON,ARGS_MAIN ,ARGS_STRATEGY ,ARGS_TRADE ,ARGS_WEBSERVER,ARGS_COMMON_OPTIMIZE ,ARGS_BACKTEST ,ARGS_HYPEROPT ,ARGS_EDGE ,ARGS_LIST_STRATEGIES ,ARGS_LIST_FREQAIMODELS ,ARGS_LIST_HYPEROPTS ,ARGS_BACKTEST_SHOW ,ARGS_LIST_EXCHANGES ,ARGS_LIST_TIMEFRAMES ,ARGS_LIST_PAIRS ,ARGS_TEST_PAIRLIST,ARGS_CREATE_USERDIR ,ARGS_BUILD_CONFIG ,ARGS_SHOW_CONFIG,ARGS_BUILD_STRATEGY ,ARGS_CONVERT_DATA_TRADES ,ARGS_CONVERT_DATA,ARGS_CONVERT_DATA_OHLCV ,ARGS_CONVERT_TRADES,ARGS_LIST_DATA,ARGS_DOWNLOAD_DATA,ARGS_PLOT_DATAFRAME,ARGS_PLOT_PROFIT,ARGS_CONVERT_DB,ARGS_INSTALL_UI,ARGS_SHOW_TRADES,ARGS_HYPEROPT_LIST,ARGS_HYPEROPT_SHOW,ARGS_ANALYZE_ENTRIES_EXITS ,ARGS_STRATEGY_UPDATER,ARGS_LOOKAHEAD_ANALYSIS,ARGS_RECURSIVE_ANALYSIS,NO_CONF_REQURIED,NO_CONF_ALLOWED
+from freqtrade.commands.arguments import   ARGS_COMMON,ARGS_MAIN ,ARGS_STRATEGY ,ARGS_TRADE ,ARGS_WEBSERVER,ARGS_COMMON_OPTIMIZE ,ARGS_BACKTEST ,ARGS_HYPEROPT ,ARGS_EDGE ,ARGS_LIST_STRATEGIES ,ARGS_LIST_FREQAIMODELS ,ARGS_LIST_HYPEROPTS ,ARGS_BACKTEST_SHOW ,ARGS_LIST_EXCHANGES ,ARGS_LIST_TIMEFRAMES ,ARGS_LIST_PAIRS ,ARGS_TEST_PAIRLIST,ARGS_CREATE_USERDIR ,ARGS_BUILD_CONFIG ,ARGS_SHOW_CONFIG,ARGS_BUILD_STRATEGY ,ARGS_CONVERT_DATA_TRADES ,ARGS_CONVERT_DATA,ARGS_CONVERT_DATA_OHLCV ,ARGS_CONVERT_TRADES,ARGS_LIST_DATA,ARGS_DOWNLOAD_DATA,ARGS_PLOT_DATAFRAME,ARGS_PLOT_PROFIT,ARGS_CONVERT_DB,ARGS_INSTALL_UI,ARGS_SHOW_TRADES,ARGS_HYPEROPT_LIST,ARGS_HYPEROPT_SHOW,ARGS_ANALYZE_ENTRIES_EXITS ,ARGS_STRATEGY_UPDATER,ARGS_LOOKAHEAD_ANALYSIS,ARGS_RECURSIVE_ANALYSIS,NO_CONF_REQURIED,NO_CONF_ALLOWED
+from freqtrade.commands.arguments import Arguments as ArgumentsBase
 
         
-class Arguments:
+class Arguments(ArgumentsBase):
     """
     Arguments Class. Manage the arguments received by the cli
     """
 
-    def __init__(self, args: list[str] | None) -> None:
-        self.args = args
-        self._parsed_arg: Namespace | None = None
+ 
 
-    def get_parsed_arg(self) -> dict[str, Any]:
-        """
-        Return the list of arguments
-        :return: List[str] List of arguments
-        """
-        if self._parsed_arg is None:
-            self._build_subcommands()
-            self._parsed_arg = self._parse_args()
-
-        return vars(self._parsed_arg)
-
-    def _parse_args(self) -> Namespace:
-        """
-        Parses given arguments and returns an argparse Namespace instance.
-        """
-        parsed_arg = self.parser.parse_args(self.args)
-
-        # Workaround issue in argparse with action='append' and default value
-        # (see https://bugs.python.org/issue16399)
-        # Allow no-config for certain commands (like downloading / plotting)
-        if "config" in parsed_arg and parsed_arg.config is None:
-            conf_required = "command" in parsed_arg and parsed_arg.command in NO_CONF_REQURIED
-
-            if "user_data_dir" in parsed_arg and parsed_arg.user_data_dir is not None:
-                user_dir = parsed_arg.user_data_dir
-            else:
-                # Default case
-                user_dir = "user_data"
-                # Try loading from "user_data/config.json"
-            cfgfile = Path(user_dir) / DEFAULT_CONFIG
-            if cfgfile.is_file():
-                parsed_arg.config = [str(cfgfile)]
-            else:
-                # Else use "config.json".
-                cfgfile = Path.cwd() / DEFAULT_CONFIG
-                if cfgfile.is_file() or not conf_required:
-                    parsed_arg.config = [DEFAULT_CONFIG]
-
-        return parsed_arg
-
-    def _build_args(self, optionlist: list[str], parser: ArgumentParser | _ArgumentGroup) -> None:
-        for val in optionlist:
-            opt = AVAILABLE_CLI_OPTIONS[val]
-            parser.add_argument(*opt.cli, dest=val, **opt.kwargs)
-
+ 
     def _build_subcommands(self) -> None:
         """
         Builds and attaches all subcommands.
         :return: None
         """
+        from freqtrade0.commands import start_trading
+        # Build shared arguments (as group Common Options)
+        _common_parser = ArgumentParser(add_help=False)
+        group = _common_parser.add_argument_group("Common arguments")
+        self._build_args(optionlist=ARGS_COMMON, parser=group)
+
+        _strategy_parser = ArgumentParser(add_help=False)
+        strategy_group = _strategy_parser.add_argument_group("Strategy arguments")
+        self._build_args(optionlist=ARGS_STRATEGY, parser=strategy_group)
+
+        # Build main command
+        self.parser = ArgumentParser(
+            prog="freqtrade", description="Free, open source crypto trading bot"
+        )
+        self._build_args(optionlist=ARGS_MAIN, parser=self.parser)
+
+      
         from freqtrade.commands import (
             start_analysis_entries_exits,
             start_backtesting,
@@ -104,23 +76,7 @@ class Arguments:
             start_test_pairlist,
             start_webserver,
         )
-        from freqtrade0.commands import start_trading
-        # Build shared arguments (as group Common Options)
-        _common_parser = ArgumentParser(add_help=False)
-        group = _common_parser.add_argument_group("Common arguments")
-        self._build_args(optionlist=ARGS_COMMON, parser=group)
-
-        _strategy_parser = ArgumentParser(add_help=False)
-        strategy_group = _strategy_parser.add_argument_group("Strategy arguments")
-        self._build_args(optionlist=ARGS_STRATEGY, parser=strategy_group)
-
-        # Build main command
-        self.parser = ArgumentParser(
-            prog="freqtrade", description="Free, open source crypto trading bot"
-        )
-        self._build_args(optionlist=ARGS_MAIN, parser=self.parser)
-
-      
+    
         subparsers = self.parser.add_subparsers(
             dest="command",
             # Use custom message when no subhandler is added

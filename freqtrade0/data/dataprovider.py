@@ -73,24 +73,6 @@ class DataProvider(dataprovider.DataProvider):
 
 
 
-
-
-   
-
-
-
- 
-
-
-  
-
-
- 
-
-
-
-
-
     def merge_pairs_helperpairs(self,pairlist: ListPairsWithTimeframes,
         helping_pairs: ListPairsWithTimeframes | None = None):
         final_pairs = (pairlist + helping_pairs) if helping_pairs else pairlist
@@ -151,113 +133,11 @@ class DataProvider(dataprovider.DataProvider):
     #         return {}
    
 
-    def ohlcv(
-        self, pair: str, timeframe: str | None = None, copy: bool = True, candle_type: str = ""
-    ) -> DataFrame:
-        """
-        Get candle (OHLCV) data for the given pair as DataFrame
-        Please use the `available_pairs` method to verify which pairs are currently cached.
-        :param pair: pair to get the data for
-        :param timeframe: Timeframe to get data for
-        :param candle_type: '', mark, index, premiumIndex, or funding_rate
-        :param copy: copy dataframe before returning if True.
-                     Use False only for read-only operations (where the dataframe is not modified)
-        """
-        if self._exchange is None:
-            raise OperationalException(NO_EXCHANGE_EXCEPTION)
-        if self.runmode in (RunMode.DRY_RUN, RunMode.LIVE):
-            _candle_type = (
-                CandleType.from_string(candle_type)
-                if candle_type != ""
-                else self._config["candle_type_def"]
-            )
-            return self._exchange.klines(
-                (pair, timeframe or self._config["timeframe"], _candle_type), copy=copy
-            )
-        else:
-            return DataFrame()
+   
 
-    def trades(
-        self, pair: str, timeframe: str | None = None, copy: bool = True, candle_type: str = ""
-    ) -> DataFrame:
-        """
-        Get candle (TRADES) data for the given pair as DataFrame
-        Please use the `available_pairs` method to verify which pairs are currently cached.
-        This is not meant to be used in callbacks because of lookahead bias.
-        :param pair: pair to get the data for
-        :param timeframe: Timeframe to get data for
-        :param candle_type: '', mark, index, premiumIndex, or funding_rate
-        :param copy: copy dataframe before returning if True.
-                     Use False only for read-only operations (where the dataframe is not modified)
-        """
-        if self.runmode in (RunMode.DRY_RUN, RunMode.LIVE):
-            if self._exchange is None:
-                raise OperationalException(NO_EXCHANGE_EXCEPTION)
-            _candle_type = (
-                CandleType.from_string(candle_type)
-                if candle_type != ""
-                else self._config["candle_type_def"]
-            )
-            return self._exchange.trades(
-                (pair, timeframe or self._config["timeframe"], _candle_type), copy=copy
-            )
-        else:
-            data_handler = get_datahandler(
-                self._config["datadir"], data_format=self._config["dataformat_trades"]
-            )
-            trades_df = data_handler.trades_load(
-                pair, self._config.get("trading_mode", TradingMode.SPOT)
-            )
-            return trades_df
+   
 
-    def market(self, pair: str) -> dict[str, Any] | None:
-        """
-        Return market data for the pair
-        :param pair: Pair to get the data for
-        :return: Market data dict from ccxt or None if market info is not available for the pair
-        """
-        if self._exchange is None:
-            raise OperationalException(NO_EXCHANGE_EXCEPTION)
-        return self._exchange.markets.get(pair)
+   
 
-    def ticker(self, pair: str):
-        """
-        Return last ticker data from exchange
-        :param pair: Pair to get the data for
-        :return: Ticker dict from exchange or empty dict if ticker is not available for the pair
-        """
-        if self._exchange is None:
-            raise OperationalException(NO_EXCHANGE_EXCEPTION)
-        try:
-            return self._exchange.fetch_ticker(pair)
-        except ExchangeError:
-            return {}
+   
 
-    def orderbook(self, pair: str, maximum: int) -> OrderBook:
-        """
-        Fetch latest l2 orderbook data
-        Warning: Does a network request - so use with common sense.
-        :param pair: pair to get the data for
-        :param maximum: Maximum number of orderbook entries to query
-        :return: dict including bids/asks with a total of `maximum` entries.
-        """
-        if self._exchange is None:
-            raise OperationalException(NO_EXCHANGE_EXCEPTION)
-        return self._exchange.fetch_l2_order_book(pair, maximum)
-
-    def send_msg(self, message: str, *, always_send: bool = False) -> None:
-        """
-        Send custom RPC Notifications from your bot.
-        Will not send any bot in modes other than Dry-run or Live.
-        :param message: Message to be sent. Must be below 4096.
-        :param always_send: If False, will send the message only once per candle, and suppress
-                            identical messages.
-                            Careful as this can end up spaming your chat.
-                            Defaults to False
-        """
-        if self.runmode not in (RunMode.DRY_RUN, RunMode.LIVE):
-            return
-
-        if always_send or message not in self.__msg_cache:
-            self._msg_queue.append(message)
-        self.__msg_cache[message] = True

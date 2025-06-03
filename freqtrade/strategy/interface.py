@@ -658,7 +658,7 @@ class IStrategy(ABC, HyperStrategyMixin):
         current_entry_profit: float,
         current_exit_profit: float,
         **kwargs,
-    ) -> float | None | tuple[float | None, str | None]:
+    ) -> float | None | tuple:
         """
         Custom trade adjustment logic, returning the stake amount that a trade should be
         increased or decreased.
@@ -684,7 +684,7 @@ class IStrategy(ABC, HyperStrategyMixin):
         :return float: Stake amount to adjust your trade,
                        Positive values to increase position, Negative values to decrease position.
                        Return None for no action.
-                       Optionally, return a tuple with a 2nd element with an order reason
+                       Optionally, return a tuple with a 3nd element with an order reason
         """
         return None
 

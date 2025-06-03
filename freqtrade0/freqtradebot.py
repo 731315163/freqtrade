@@ -297,17 +297,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
     #     self.rpc.process_msg_queue(self.dataprovider._msg_queue)
     #     self.last_process = datetime.now(timezone.utc)
 
-    # def _get_bidirectional_pairs(self):
-
-    #     trade_pairs:dict[str,str] = {}
-        
-    #     for trade in Trade.get_open_trades():
-    #         trade = cast(Trade, trade)
-    #         pair = trade.pair
-    #         direcation: str = trade_pairs.get(pair, "")
-    #         if trade.trade_direction not in direcation:
-    #             trade_pairs[pair] = direcation + trade.trade_direction
-    #     return trade_pairs
+ 
 
  
     def _get_nolock_whitelist(self,can_hedge_mode: bool=False) -> dict[str,str]:
@@ -496,7 +486,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             )
             stake_available = self.wallets.get_available_stake_amount()
             logger.debug(f"Calling adjust_trade_position for pair {trade.pair}")
-            stake_amount, order_tag = self.strategy._adjust_trade_position_internal(
+            stake_amount, price,order_tag = self.strategy._adjust_trade_position_internal(
                 trade=trade,
                 current_time=datetime.now(timezone.utc),
                 current_rate=current_entry_rate,
@@ -526,7 +516,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 self.execute_entry(
                     trade.pair,
                     stake_amount,
-                    price=current_entry_rate,
+                    price=price,
                     trade=trade,
                     is_short=trade.is_short,
                     mode="pos_adjust",
@@ -568,23 +558,3 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                     sub_trade_amt=amount,
                     exit_tag=order_tag,
                 )
-    # def calc_profit_ratio(self, trade: Trade,current_entry_rate: float, current_exit_rate: float|None = None):
-        
-    #     match len(trade.select_filled_orders()) :
-    #         case l if l < 1:
-    #             current_entry_profit= 0
-    #             current_exit_profit = 0
-    #         case 1:
-    #             current_entry_profit = trade.calc_profit_ratio(current_entry_rate)
-    #             if current_exit_rate is None:
-    #                 current_exit_profit = current_entry_profit
-    #             else:
-    #                 current_exit_profit = trade.calc_profit_ratio(current_exit_rate)
-    #         case _:
-    #             current_entry_profit = trade.calculate_profit(current_entry_rate).total_profit
-    #             if current_exit_rate is None:
-    #                 current_exit_profit = current_entry_profit
-    #             else:
-    #                 current_exit_profit = trade.calculate_profit(current_exit_rate).total_profit
-                    
-    #     return current_entry_profit,current_exit_profit

@@ -8,11 +8,10 @@ import ccxt
 from freqtrade.constants import BuySell
 from freqtrade.enums import MarginMode, PriceType, TradingMode
 from freqtrade.exceptions import DDosProtection, OperationalException, TemporaryError
+from freqtrade0.exchange import Exchange
 from freqtrade.exchange.common import retrier
 from freqtrade.exchange.exchange_types import CcxtOrder, FtHas
 from freqtrade.misc import safe_value_fallback2
-
-from .exchange import Exchange
 
 
 logger = logging.getLogger(__name__)
@@ -47,6 +46,7 @@ class Gate(Exchange):
         "funding_fee_candle_limit": 90,
         "stop_price_type_field": "price_type",
         "l2_limit_upper": 300,
+        "stoploss_blocks_assets": False,
         "stop_price_type_value_mapping": {
             PriceType.LAST: 0,
             PriceType.MARK: 1,
