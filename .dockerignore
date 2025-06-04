@@ -23,3 +23,7 @@ user_data
 .vscode
 .mypy_cache
 .ipynb_checkpoints
+dist
+__pycache__
+.venv
+.pytest_cache

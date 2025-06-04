@@ -23,7 +23,7 @@ from freqtrade.exceptions import (
     PricingError,
     TemporaryError,
 )
-from freqtrade.exchange import (
+from freqtrade0.exchange import (
     Binance,
     Bybit,
     Exchange,
@@ -37,7 +37,7 @@ from freqtrade.exchange.common import (
     calculate_backoff,
     remove_exchange_credentials,
 )
-from freqtrade.resolvers.exchange_resolver import ExchangeResolver
+from freqtrade0.resolvers.exchange_resolver import ExchangeResolver
 from freqtrade.util import dt_now, dt_ts
 from tests.conftest import (
     EXMS,

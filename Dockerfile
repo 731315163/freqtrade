@@ -50,8 +50,8 @@ USER ftuser
 COPY --chown=ftuser:ftuser . /freqtrade/
 
 RUN pip install -e . --user --no-cache-dir --no-build-isolation \
-  && mkdir /freqtrade/user_data/ && freqtrade install-ui && pip install --user git+https://github.com/731315163/pandasutils.git \
-  && pip install --user git+https://github.com/731315163/mathematics.git  
+  && mkdir /freqtrade/user_data/ && freqtrade install-ui && pip install  --user --no-cache-dir git+https://github.com/731315163/pandasutils.git \
+  && pip install --user --no-cache-dir git+https://github.com/731315163/mathematics.git  
 
 ENTRYPOINT ["freqtrade0"]
 # Default to trade mode

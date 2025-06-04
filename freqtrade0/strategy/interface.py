@@ -5,7 +5,7 @@ This module defines the interface to apply for strategies
 
 import logging
 from abc import abstractmethod
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Literal
 
 from pandas import DataFrame
@@ -25,6 +25,7 @@ from freqtrade.strategy.informative_decorator import (
 )
 from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 import freqtrade.strategy
+from freqtrade.util.datetime_helpers import dt_now
 
 logger = logging.getLogger(__name__)
 
@@ -255,4 +256,41 @@ class IStrategy(freqtrade.strategy.IStrategy):
             case _:
                 return None
         return result
-    
+    def get_latest_candle(
+        self,
+        pair: str,
+        timeframe: str,
+        dataframe: DataFrame,
+    ) -> tuple[DataFrame | None, datetime | None]:
+        """
+        Calculates current signal based based on the entry order or exit order
+        columns of the dataframe.
+        Used by Bot to get the signal to enter, or exit
+        :param pair: pair in format ANT/BTC
+        :param timeframe: timeframe to use
+        :param dataframe: Analyzed dataframe to get signal from.
+        :return: (None, None) or (Dataframe, latest_date) - corresponding to the last candle
+        """
+        if not isinstance(dataframe, DataFrame) or dataframe.empty:
+            logger.warning(f"Empty candle (OHLCV) data for pair {pair}")
+            return None, None
+
+        try:
+            latest_date_pd = dataframe["date"].max()
+            latest = dataframe.loc[dataframe["date"] == latest_date_pd].iloc[-1]
+        except Exception as e:
+            logger.warning(f"Unable to get latest candle (OHLCV) data for pair {pair} - {e}")
+            return None, None
+        # Explicitly convert to datetime object to ensure the below comparison does not fail
+        latest_date: datetime = latest_date_pd.to_pydatetime()
+
+        # Check if dataframe is out of date
+        timeframe_minutes = timeframe_to_minutes(timeframe)
+        offset = self.config.get("exchange", {}).get("outdated_offset", 1)
+        if latest_date < (dt_now() - timedelta(minutes=timeframe_minutes * 2 + offset)):
+            raise TimeoutError(
+                "Outdated history for pair %s. Last tick is %s minutes old",
+                pair,
+                int((dt_now() - latest_date).total_seconds() // 60),
+            )
+        return latest, latest_date
