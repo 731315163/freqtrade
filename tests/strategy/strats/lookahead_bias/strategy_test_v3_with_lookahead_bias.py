@@ -2,7 +2,7 @@
 from pandas import DataFrame
 from technical.indicators import ichimoku
 
-from freqtrade.strategy import IStrategy
+from freqtrade0.strategy import IStrategy
 from freqtrade.strategy.parameters import CategoricalParameter
 
 

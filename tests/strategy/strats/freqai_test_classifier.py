@@ -5,8 +5,8 @@ import numpy as np
 import talib.abstract as ta
 from pandas import DataFrame
 
-from freqtrade.strategy import DecimalParameter, IntParameter, IStrategy
-
+from freqtrade.strategy import DecimalParameter, IntParameter
+from freqtrade.strategy.interface import IStrategy
 
 logger = logging.getLogger(__name__)
 

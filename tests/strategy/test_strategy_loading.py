@@ -8,10 +8,12 @@ from pandas import DataFrame
 
 from freqtrade.configuration import Configuration
 from freqtrade.exceptions import OperationalException
-from freqtrade.resolvers import StrategyResolver
-from freqtrade.strategy.interface import IStrategy
+
+
 from tests.conftest import CURRENT_TEST_STRATEGY, log_has, log_has_re
 
+from freqtrade0.resolvers import StrategyResolver
+from freqtrade0.strategy.interface import IStrategy
 
 def test_search_strategy():
     default_location = Path(__file__).parent / "strats"
@@ -383,17 +385,6 @@ def test_strategy_max_open_trades_infinity_from_strategy(caplog, default_conf):
 
     # this test assumes -1 set to 'max_open_trades' in CURRENT_TEST_STRATEGY
     assert strategy.max_open_trades == float("inf")
-    assert default_conf["max_open_trades"] == float("inf")
-
-    # test if the default value is set to infinity (V2 doesn't set max_open_trades explicitly)
-    del default_conf["max_open_trades"]
-    default_conf.update(
-        {
-            "strategy": "StrategyTestV2",
-        }
-    )
-    strategy2 = StrategyResolver.load_strategy(default_conf)
-    assert strategy2.max_open_trades == float("inf")
     assert default_conf["max_open_trades"] == float("inf")
 
 

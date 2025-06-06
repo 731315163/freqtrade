@@ -4,7 +4,8 @@ import talib.abstract as ta
 from pandas import DataFrame
 
 import freqtrade.vendor.qtpylib.indicators as qtpylib
-from freqtrade.strategy import IStrategy
+from freqtrade0.strategy import IStrategy
+
 
 
 class StrategyTestV2(IStrategy):

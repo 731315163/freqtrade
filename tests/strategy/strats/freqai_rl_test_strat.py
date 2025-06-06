@@ -4,7 +4,7 @@ from functools import reduce
 import talib.abstract as ta
 from pandas import DataFrame
 
-from freqtrade.strategy import IStrategy
+from freqtrade0.strategy import IStrategy
 
 
 logger = logging.getLogger(__name__)

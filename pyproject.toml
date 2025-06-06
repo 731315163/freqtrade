@@ -74,6 +74,7 @@ dependencies = [
   "bottleneck==1.4.2",
   "numexpr==2.10.2",
   "certifi==2025.4.26",
+  "scikit-optimize>=0.10.2",
 ]
 
 [project.optional-dependencies]

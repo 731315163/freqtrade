@@ -11,10 +11,9 @@ from freqtrade.strategy import (
     BooleanParameter,
     DecimalParameter,
     IntParameter,
-    IStrategy,
     RealParameter,
 )
-
+from freqtrade0.strategy import IStrategy
 
 class StrategyTestV3(IStrategy):
     """

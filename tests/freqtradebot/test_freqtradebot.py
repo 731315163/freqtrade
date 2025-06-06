@@ -30,11 +30,14 @@ from freqtrade.exceptions import (
     PricingError,
     TemporaryError,
 )
-from freqtrade.freqtradebot import FreqtradeBot
+
+from freqtrade0.freqtradebot import FreqtradeBot
+from freqtrade0.worker import Worker
+
 from freqtrade.persistence import Order, PairLocks, Trade
 from freqtrade.plugins.protections.iprotection import ProtectionReturn
 from freqtrade.util.datetime_helpers import dt_now, dt_utc
-from freqtrade.worker import Worker
+
 from tests.conftest import (
     EXMS,
     create_mock_trades,
@@ -74,9 +77,37 @@ def patch_RPCManager(mocker) -> MagicMock:
     rpc_mock = mocker.patch("freqtrade.freqtradebot.RPCManager.send_msg", MagicMock())
     return rpc_mock
 
+def test_get_bidirectional(
+    default_conf_usdt, ticker_usdt, fee, mocker, limit_buy_order_usdt_open, caplog
+) -> None:
+    patch_RPCManager(mocker)
+    patch_exchange(mocker)
+    default_conf_usdt["max_open_trades"] = 4
+    mocker.patch.multiple(
+        EXMS,
+        fetch_ticker=ticker_usdt,
+        create_order=MagicMock(return_value=limit_buy_order_usdt_open),
+        get_fee=fee,
+    )
+    freqtrade = FreqtradeBot(default_conf_usdt)
+    patch_get_signal(freqtrade)
 
-# Unit tests
+    # Create 2 existing trades
+    freqtrade.execute_entry("ETH/USDT", default_conf_usdt["stake_amount"])
+    freqtrade.execute_entry("NEO/BTC", default_conf_usdt["stake_amount"])
 
+    pairs= freqtrade._get_bidirectional_pairs()
+    assert pairs    == {"ETH/USDT": "long", "NEO/BTC": "long"}
+    limit_buy_order_usdt_open["id"] = "123444"
+    patch_get_signal(freqtrade,enter_long=False, enter_short=True)
+    freqtrade.execute_entry("ETH/USDT", default_conf_usdt["stake_amount"],is_short=True)
+    freqtrade.execute_entry("NEO/BTC", default_conf_usdt["stake_amount"],is_short=True)
+    # Change order_id for new orders
+    pairs= freqtrade._get_bidirectional_pairs()
+    assert pairs    == {"ETH/USDT": "longshort", "NEO/BTC": "longshort"}
+    
+
+    
 
 def test_freqtradebot_state(mocker, default_conf_usdt, markets) -> None:
     mocker.patch(f"{EXMS}.markets", PropertyMock(return_value=markets))
@@ -90,7 +121,7 @@ def test_freqtradebot_state(mocker, default_conf_usdt, markets) -> None:
 
 def test_process_stopped(mocker, default_conf_usdt) -> None:
     freqtrade = get_patched_freqtradebot(mocker, default_conf_usdt)
-    coo_mock = mocker.patch("freqtrade.freqtradebot.FreqtradeBot.cancel_all_open_orders")
+    coo_mock = mocker.patch("freqtrade0.freqtradebot.FreqtradeBot.cancel_all_open_orders")
     freqtrade.process_stopped()
     assert coo_mock.call_count == 0
 
@@ -107,8 +138,8 @@ def test_process_calls_sendmsg(mocker, default_conf_usdt) -> None:
 
 
 def test_bot_cleanup(mocker, default_conf_usdt, caplog) -> None:
-    mock_cleanup = mocker.patch("freqtrade.freqtradebot.Trade.commit")
-    coo_mock = mocker.patch("freqtrade.freqtradebot.FreqtradeBot.cancel_all_open_orders")
+    mock_cleanup = mocker.patch("freqtrade0.freqtradebot.Trade.commit")
+    coo_mock = mocker.patch("freqtrade0.freqtradebot.FreqtradeBot.cancel_all_open_orders")
     freqtrade = get_patched_freqtradebot(mocker, default_conf_usdt)
     freqtrade.cleanup()
     assert log_has("Cleaning up modules ...", caplog)
@@ -121,9 +152,9 @@ def test_bot_cleanup(mocker, default_conf_usdt, caplog) -> None:
 
 
 def test_bot_cleanup_db_errors(mocker, default_conf_usdt, caplog) -> None:
-    mocker.patch("freqtrade.freqtradebot.Trade.commit", side_effect=OperationalException())
+    mocker.patch("freqtrade0.freqtradebot.Trade.commit", side_effect=OperationalException())
     mocker.patch(
-        "freqtrade.freqtradebot.FreqtradeBot.check_for_open_trades",
+        "freqtrade0.freqtradebot.FreqtradeBot.check_for_open_trades",
         side_effect=OperationalException(),
     )
     freqtrade = get_patched_freqtradebot(mocker, default_conf_usdt)
@@ -183,7 +214,7 @@ def test_load_strategy_no_keys(default_conf_usdt, mocker, runmode, caplog) -> No
     patch_exchange(mocker)
     conf = deepcopy(default_conf_usdt)
     conf["runmode"] = runmode
-    erm = mocker.patch("freqtrade.freqtradebot.ExchangeResolver.load_exchange")
+    erm = mocker.patch("freqtrade0.freqtradebot.ExchangeResolver.load_exchange")
 
     freqtrade = FreqtradeBot(conf)
     strategy_config = freqtrade.strategy.config
@@ -659,11 +690,11 @@ def test_create_trades_preopen(
     limit_buy_order_usdt_open["id"] = "123444"
 
     # Create 2 new trades using create_trades
-    assert freqtrade.create_trade("ETH/USDT")
-    assert freqtrade.create_trade("NEO/BTC")
+    assert not freqtrade.create_trade("ETH/USDT")
+    assert not freqtrade.create_trade("NEO/BTC")
 
     trades = Trade.get_open_trades()
-    assert len(trades) == 4
+    assert len(trades) == 2
 
 
 @pytest.mark.parametrize("is_short", [False, True])
@@ -853,7 +884,7 @@ def test_process_informative_pairs_added(default_conf_usdt, ticker_usdt, mocker)
         return_value=[("BTC/ETH", "1m", CandleType.SPOT), ("ETH/USDT", "1h", CandleType.SPOT)]
     )
     mocker.patch.multiple(
-        "freqtrade.strategy.interface.IStrategy",
+        "freqtrade0.strategy.interface.IStrategy",
         get_exit_signal=MagicMock(return_value=(False, False)),
         get_entry_signal=MagicMock(return_value=(None, None)),
     )
@@ -1242,7 +1273,7 @@ def test_enter_positions(
     freqtrade = get_patched_freqtradebot(mocker, default_conf_usdt)
 
     mock_ct = mocker.patch(
-        "freqtrade.freqtradebot.FreqtradeBot.create_trade",
+        "freqtrade0.freqtradebot.FreqtradeBot.create_trade",
         MagicMock(return_value=return_value, side_effect=side_effect),
     )
     n = freqtrade.enter_positions()
@@ -1815,7 +1846,7 @@ def test_close_trade(
 
 def test_bot_loop_start_called_once(mocker, default_conf_usdt, caplog):
     ftbot = get_patched_freqtradebot(mocker, default_conf_usdt)
-    mocker.patch("freqtrade.freqtradebot.FreqtradeBot.create_trade")
+    mocker.patch("freqtrade0.freqtradebot.FreqtradeBot.create_trade")
     patch_get_signal(ftbot)
     ftbot.strategy.bot_loop_start = MagicMock(side_effect=ValueError)
     ftbot.strategy.analyze = MagicMock()
