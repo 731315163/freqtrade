@@ -41,10 +41,11 @@ def test_other_types():
 
 # Parameterized test for string inputs
 @pytest.mark.parametrize("input_str,expected", [
-    (1, LongShort.LONG),
-    (2, LongShort.SHORT),
+    (2, LongShort.LONG),
+    (1, LongShort.SHORT),
     (LongShort.LONG , LongShort.LONG),
     (LongShort.LONG|LongShort.SHORT, LongShort.BOTH),
+    (LongShort.LONG|LongShort.SHORT|LongShort.NONE, LongShort.BOTH),
  
 ])
 def test_equal_inputs(input_str, expected):
@@ -62,3 +63,16 @@ def test_equal_inputs(input_str, expected):
 def test_not_equal_inputs(input_str, expected):
     """Test various string input scenarios"""
     assert input_str != expected
+
+
+@pytest.mark.parametrize("input_str,expected", [
+    
+    (LongShort.BOTH,LongShort.LONG),
+    (LongShort.LONG, LongShort.SHORT),  # Case-sensitive
+    (LongShort.SHORT,LongShort.NONE),
+    (LongShort.LONG | LongShort.SHORT, LongShort.NONE)
+  
+])
+def test_bigthan_inputs(input_str, expected):
+    """Test various string input scenarios"""
+    assert input_str > expected

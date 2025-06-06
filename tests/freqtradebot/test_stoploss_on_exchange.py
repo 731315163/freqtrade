@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from freqtrade.enums import ExitCheckTuple, ExitType, RPCMessageType
 from freqtrade.exceptions import ExchangeError, InsufficientFundsError, InvalidOrderException
-from freqtrade.freqtradebot import FreqtradeBot
+from freqtrade0.freqtradebot import FreqtradeBot
 from freqtrade.persistence import Order, Trade
 from freqtrade.persistence.models import PairLock
 from freqtrade.util.datetime_helpers import dt_now
@@ -36,7 +36,7 @@ def test_add_stoploss_on_exchange(mocker, default_conf_usdt, limit_order, is_sho
         get_fee=fee,
     )
     order = limit_order[entry_side(is_short)]
-    mocker.patch("freqtrade.freqtradebot.FreqtradeBot.handle_trade", MagicMock(return_value=True))
+    mocker.patch("freqtrade0.freqtradebot.FreqtradeBot.handle_trade", MagicMock(return_value=True))
     mocker.patch(f"{EXMS}.fetch_order", return_value=order)
     mocker.patch(f"{EXMS}.get_trades_for_order", return_value=[])
 
@@ -509,7 +509,7 @@ def test_create_stoploss_order_insufficient_funds(
     exit_order = limit_order[exit_side(is_short)]["id"]
     freqtrade = get_patched_freqtradebot(mocker, default_conf_usdt)
 
-    mock_insuf = mocker.patch("freqtrade.freqtradebot.FreqtradeBot.handle_insufficient_funds")
+    mock_insuf = mocker.patch("freqtrade0.freqtradebot.FreqtradeBot.handle_insufficient_funds")
     mocker.patch.multiple(
         EXMS,
         fetch_ticker=MagicMock(return_value={"bid": 1.9, "ask": 2.2, "last": 1.9}),

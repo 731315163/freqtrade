@@ -24,7 +24,7 @@ from freqtrade.strategy.informative_decorator import (
 )
 from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 from freqtrade.util.datetime_helpers import dt_now
-
+from freqtrade0.enums import LoopMode
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class IStrategy(freqtrade.strategy.IStrategy):
    
 
     can_hedge_mode: bool = False
-    loop_enable: bool = True
+    loop_mode:LoopMode = LoopMode.BOTH
     def __init__(self, config: Config) -> None:
         self.config = config
         # Dict to determine if analysis is necessary

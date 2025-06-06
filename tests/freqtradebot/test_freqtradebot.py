@@ -11,6 +11,9 @@ import pytest
 from pandas import DataFrame
 from sqlalchemy import select
 
+from freqtrade0.freqtradebot import FreqtradeBot
+from freqtrade0.worker import Worker
+from freqtrade0.enums import TradeDirection
 from freqtrade.constants import CANCEL_REASON, UNLIMITED_STAKE_AMOUNT
 from freqtrade.enums import (
     CandleType,
@@ -30,14 +33,9 @@ from freqtrade.exceptions import (
     PricingError,
     TemporaryError,
 )
-
-from freqtrade0.freqtradebot import FreqtradeBot
-from freqtrade0.worker import Worker
-
 from freqtrade.persistence import Order, PairLocks, Trade
 from freqtrade.plugins.protections.iprotection import ProtectionReturn
 from freqtrade.util.datetime_helpers import dt_now, dt_utc
-
 from tests.conftest import (
     EXMS,
     create_mock_trades,
@@ -77,34 +75,7 @@ def patch_RPCManager(mocker) -> MagicMock:
     rpc_mock = mocker.patch("freqtrade.freqtradebot.RPCManager.send_msg", MagicMock())
     return rpc_mock
 
-def test_get_bidirectional(
-    default_conf_usdt, ticker_usdt, fee, mocker, limit_buy_order_usdt_open, caplog
-) -> None:
-    patch_RPCManager(mocker)
-    patch_exchange(mocker)
-    default_conf_usdt["max_open_trades"] = 4
-    mocker.patch.multiple(
-        EXMS,
-        fetch_ticker=ticker_usdt,
-        create_order=MagicMock(return_value=limit_buy_order_usdt_open),
-        get_fee=fee,
-    )
-    freqtrade = FreqtradeBot(default_conf_usdt)
-    patch_get_signal(freqtrade)
 
-    # Create 2 existing trades
-    freqtrade.execute_entry("ETH/USDT", default_conf_usdt["stake_amount"])
-    freqtrade.execute_entry("NEO/BTC", default_conf_usdt["stake_amount"])
-
-    pairs= freqtrade._get_bidirectional_pairs()
-    assert pairs    == {"ETH/USDT": "long", "NEO/BTC": "long"}
-    limit_buy_order_usdt_open["id"] = "123444"
-    patch_get_signal(freqtrade,enter_long=False, enter_short=True)
-    freqtrade.execute_entry("ETH/USDT", default_conf_usdt["stake_amount"],is_short=True)
-    freqtrade.execute_entry("NEO/BTC", default_conf_usdt["stake_amount"],is_short=True)
-    # Change order_id for new orders
-    pairs= freqtrade._get_bidirectional_pairs()
-    assert pairs    == {"ETH/USDT": "longshort", "NEO/BTC": "longshort"}
     
 
     
@@ -577,7 +548,7 @@ def test_enter_positions_global_pairlock(
     freqtrade = FreqtradeBot(default_conf_usdt)
     patch_get_signal(freqtrade)
     n = freqtrade.enter_positions()
-    message = r"Global pairlock active until.* Not creating new trades."
+    message = r"Global pairlock active. Not creating new trades."
     n = freqtrade.enter_positions()
     # 0 trades, but it's not because of pairlock.
     assert n == 0
@@ -690,8 +661,8 @@ def test_create_trades_preopen(
     limit_buy_order_usdt_open["id"] = "123444"
 
     # Create 2 new trades using create_trades
-    assert not freqtrade.create_trade("ETH/USDT")
-    assert not freqtrade.create_trade("NEO/BTC")
+    assert not freqtrade.create_trade("ETH/USDT",direction=TradeDirection.LONG)
+    assert not freqtrade.create_trade("NEO/BTC",direction=TradeDirection.LONG)
 
     trades = Trade.get_open_trades()
     assert len(trades) == 2
@@ -892,7 +863,7 @@ def test_process_informative_pairs_added(default_conf_usdt, ticker_usdt, mocker)
 
     freqtrade = FreqtradeBot(default_conf_usdt)
     freqtrade.strategy.informative_pairs = inf_pairs
-    # patch_get_signal(freqtrade)
+    patch_get_signal(freqtrade)
 
     freqtrade.process()
     assert inf_pairs.call_count == 1
@@ -5966,7 +5937,7 @@ def test_process_open_trade_positions_exception(mocker, default_conf_usdt, fee, 
     freqtrade = get_patched_freqtradebot(mocker, default_conf_usdt)
 
     mocker.patch(
-        "freqtrade.freqtradebot.FreqtradeBot.check_and_call_adjust_trade_position",
+        "freqtrade0.freqtradebot.FreqtradeBot.check_and_call_adjust_trade_position",
         side_effect=DependencyException(),
     )
 
