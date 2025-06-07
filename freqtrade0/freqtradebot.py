@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from copy import deepcopy
 from datetime import datetime, time, timezone
 from threading import Lock
-from typing import Sequence, cast
+from typing import cast
 
 import jsonschema
 from pandas import DataFrame

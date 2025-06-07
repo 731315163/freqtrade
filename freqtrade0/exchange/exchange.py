@@ -322,5 +322,3 @@ class Exchange(freqtrade.exchange.Exchange):
             else:
                 logger.error(f"No new ticks for {pair}")
         return pairwt, None
-
-  

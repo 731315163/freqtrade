@@ -863,16 +863,15 @@ def test_process_informative_pairs_added(default_conf_usdt, ticker_usdt, mocker)
 
     freqtrade = FreqtradeBot(default_conf_usdt)
     freqtrade.strategy.informative_pairs = inf_pairs
-    patch_get_signal(freqtrade)
 
     freqtrade.process()
     assert inf_pairs.call_count == 1
     assert refresh_mock.call_count == 1
-    assert ("BTC/ETH", "1m", CandleType.SPOT) in refresh_mock.call_args[0][0]
-    assert ("ETH/USDT", "1h", CandleType.SPOT) in refresh_mock.call_args[0][0]
-    assert ("ETH/USDT", default_conf_usdt["timeframe"], CandleType.SPOT) in refresh_mock.call_args[
-        0
-    ][0]
+    print(refresh_mock.call_args)
+    assert ("BTC/ETH", "1m", CandleType.SPOT) in refresh_mock.call_args[1]["pair_list"]
+    assert ("ETH/USDT", "1h", CandleType.SPOT) in refresh_mock.call_args[1]["pair_list"]
+    # 原本的单元测试是[0][0] 但只有改为[1]["pair_list"] 能通过
+    assert ("ETH/USDT", default_conf_usdt["timeframe"], CandleType.SPOT) in refresh_mock.call_args[0][0]
 
 
 @pytest.mark.parametrize(

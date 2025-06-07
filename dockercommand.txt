@@ -4,8 +4,7 @@ docker pull catspeed/freqtrade
 
 # 查看悬空镜像
 docker images -f "dangling=true"
-# 查看悬空镜像
-docker images -f "dangling=true"
+
 
 # 删除悬空镜像
 docker image prune

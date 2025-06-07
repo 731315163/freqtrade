@@ -131,13 +131,3 @@ class DataProvider(dataprovider.DataProvider):
     #         return await self._exchange.refresh_latest_trades(pairlist)
     #     else:
     #         return {}
-   
-
-   
-
-   
-
-   
-
-   
-
