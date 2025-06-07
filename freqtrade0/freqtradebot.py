@@ -15,6 +15,7 @@ from pandas import DataFrame
 from schedule import Scheduler
 
 from freqtrade import constants
+from freqtrade.persistence.trade_model import ProfitStruct
 from freqtrade0.data.dataprovider import DataProvider
 from freqtrade0.exchange import (
     remove_exchange_credentials,
@@ -306,7 +307,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             return False
         signal,stake_amount,price,entry_tag= result
         if  signal is None or TradeDirection.convert(signal) & direction > TradeDirection.NONE :
-            self.logger.info(f" trade_loop,not opening {pair} because of direction mismatch")
+            self.log_once(f" trade_loop,not opening {pair} because of direction mismatch",logger.info)
             return False
         stake_amount = stake_amount if stake_amount else self.wallets.get_trade_stake_amount(
                 pair, self.config["max_open_trades"], self.edge
@@ -380,7 +381,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 except DependencyException as exception:
                     logger.warning("Unable to create trade for %s: %s", pair, exception)
                 if not trades_created:
-                    logger.debug("Found no enter signals for whitelisted currencies. Trying again...")
+                    self.log_once( "Found no enter signals for whitelisted currencies. Trying again...",logger.debug)
         return trades_created
     def check_and_call_adjust_trade_position(self, trade: Trade):
             """
@@ -393,20 +394,13 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             )
             match len(trade.select_filled_orders()) :
                 case l if l < 1:
-                    current_entry_profit= 0
+                    current_profit= 0
                     current_exit_profit = 0
-                case 1:
-                    current_entry_profit = trade.calc_profit_ratio(current_entry_rate)
-                    if current_entry_rate == current_exit_rate:
-                        current_exit_profit = current_entry_profit
-                    else:
-                        current_exit_profit = trade.calc_profit_ratio(current_exit_rate)
+                    current_entry_profit_struc: ProfitStruct = ProfitStruct(0,0,0,0)
                 case _:
-                    current_entry_profit = trade.calculate_profit(current_entry_rate).total_profit
-                    if current_entry_rate == current_exit_rate:
-                        current_exit_profit = current_entry_profit
-                    else:
-                        current_exit_profit = trade.calculate_profit(current_exit_rate).total_profit
+                    current_profit = trade.calc_profit_ratio(current_entry_rate)
+                    current_exit_profit = trade.calc_profit_ratio(current_exit_rate)
+                    current_entry_profit_struc: ProfitStruct = trade.calculate_profit(current_entry_rate)
             # i fix this calc_profit
 
             min_entry_stake = self.exchange.get_min_pair_stake_amount(
@@ -424,13 +418,13 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 trade=trade,
                 current_time=datetime.now(timezone.utc),
                 current_rate=current_entry_rate,
-                current_profit=current_entry_profit,
+                current_profit=current_profit,
                 min_stake=min_entry_stake,
                 max_stake=min(max_entry_stake, stake_available),
                 current_entry_rate=current_entry_rate,
                 current_exit_rate=current_exit_rate,
-                current_entry_profit=current_entry_profit,
-                current_exit_profit=current_exit_profit,
+                current_entry_profit=current_profit,
+                current_exit_profit=current_exit_profit,kwargs={"profit":current_entry_profit_struc}
             )
 
             if stake_amount is not None and stake_amount > 0.0:
@@ -449,7 +443,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
 
                 self.execute_entry(
                     trade.pair,
-                    stake_amount,
+                    stake_amount=stake_amount,
                     price=price,
                     trade=trade,
                     is_short=trade.is_short,
@@ -487,7 +481,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
 
                 self.execute_trade_exit(
                     trade,
-                    current_exit_rate,
+                    price,
                     exit_check=ExitCheckTuple(exit_type=ExitType.PARTIAL_EXIT),
                     sub_trade_amt=amount,
                     exit_tag=order_tag,

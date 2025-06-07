@@ -242,16 +242,23 @@ class IStrategy(freqtrade.strategy.IStrategy):
             **kwargs,
         )
         resp_tuple = resp if isinstance(resp, tuple) else (resp,)
+        def def_price(stake_amount:float|None):
+            if stake_amount is None:
+                return 0.0
+            elif stake_amount < 0:
+                return current_exit_rate
+            else:
+                return current_entry_rate
         match resp_tuple:
             case (stake_amount, price, order_tag):
                 result=( stake_amount, price, order_tag)
             case (stake_amount, price_or_tag):
                 if isinstance(price_or_tag, str):
-                    result=(stake_amount, current_rate, price_or_tag)
+                    result=(stake_amount, def_price(stake_amount) , price_or_tag)
                 else:
                     result=(stake_amount, price_or_tag, "")
             case (stake_amount, ):
-                result=( stake_amount, current_rate, "")
+                result=( stake_amount, def_price( stake_amount), "")
             case _:
                 return None
         return result

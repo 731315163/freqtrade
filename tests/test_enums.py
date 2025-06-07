@@ -1,51 +1,51 @@
 from math import exp
 import pytest
 from freqtrade.enums import MarketDirection, SignalDirection
-from freqtrade0.enums import LongShort  # Update with actual module path
+from freqtrade0.enums import TradeDirection  # Update with actual module path
 
 
 @pytest.mark.parametrize("direction,expected_direction", [
-   (SignalDirection.SHORT, LongShort.SHORT),
-    (SignalDirection.LONG, LongShort.LONG),
-    (MarketDirection.SHORT, LongShort.SHORT),
-    (MarketDirection.LONG, LongShort.LONG),
+   (SignalDirection.SHORT, TradeDirection.SHORT),
+    (SignalDirection.LONG, TradeDirection.LONG),
+    (MarketDirection.SHORT, TradeDirection.SHORT),
+    (MarketDirection.LONG, TradeDirection.LONG),
 ])
 def test_signal_direction(direction,expected_direction):
     """Verify conversion from SignalDirection.SHORT"""
-    assert LongShort.convert(direction) == expected_direction
+    assert TradeDirection.convert(direction) == expected_direction
 
 # Parameterized test for string inputs
 @pytest.mark.parametrize("input_str,expected", [
-    ("long", LongShort.LONG),
-    ("short", LongShort.SHORT),
-    ("*", LongShort.BOTH),
-    ("LONG", LongShort.NONE),  # Case-sensitive
-    ("", LongShort.NONE),
-    ("invalid", LongShort.NONE),
-    ("123", LongShort.NONE),
+    ("long", TradeDirection.LONG),
+    ("short", TradeDirection.SHORT),
+    ("*", TradeDirection.BOTH),
+    ("LONG", TradeDirection.NONE),  # Case-sensitive
+    ("", TradeDirection.NONE),
+    ("invalid", TradeDirection.NONE),
+    ("123", TradeDirection.NONE),
 ])
 def test_string_inputs(input_str, expected):
     """Test various string input scenarios"""
-    assert LongShort.convert(input_str) == expected
+    assert TradeDirection.convert(input_str) == expected
 
 # Test cases for non-string inputs
 def test_none_input():
     """Verify NONE output for None input"""
-    assert LongShort.convert(None) == LongShort.NONE
+    assert TradeDirection.convert(None) == TradeDirection.NONE
 
 def test_other_types():
     """Verify NONE output for non-string/non-enum inputs"""
-    assert LongShort.convert(123) == LongShort.NONE
-    assert LongShort.convert(["long"]) == LongShort.NONE
-    assert LongShort.convert({"key": "long"}) == LongShort.NONE
+    assert TradeDirection.convert(123) == TradeDirection.NONE
+    assert TradeDirection.convert(["long"]) == TradeDirection.NONE
+    assert TradeDirection.convert({"key": "long"}) == TradeDirection.NONE
 
 # Parameterized test for string inputs
 @pytest.mark.parametrize("input_str,expected", [
-    (2, LongShort.LONG),
-    (1, LongShort.SHORT),
-    (LongShort.LONG , LongShort.LONG),
-    (LongShort.LONG|LongShort.SHORT, LongShort.BOTH),
-    (LongShort.LONG|LongShort.SHORT|LongShort.NONE, LongShort.BOTH),
+    (2, TradeDirection.LONG),
+    (1, TradeDirection.SHORT),
+    (TradeDirection.LONG , TradeDirection.LONG),
+    (TradeDirection.LONG|TradeDirection.SHORT, TradeDirection.BOTH),
+    (TradeDirection.LONG|TradeDirection.SHORT|TradeDirection.NONE, TradeDirection.BOTH),
  
 ])
 def test_equal_inputs(input_str, expected):
@@ -55,9 +55,9 @@ def test_equal_inputs(input_str, expected):
 # Parameterized test for string inputs
 @pytest.mark.parametrize("input_str,expected", [
     
-    (LongShort.LONG, LongShort.BOTH),
-    (LongShort.LONG, LongShort.NONE),  # Case-sensitive
-    (LongShort.LONG, LongShort.SHORT),
+    (TradeDirection.LONG, TradeDirection.BOTH),
+    (TradeDirection.LONG, TradeDirection.NONE),  # Case-sensitive
+    (TradeDirection.LONG, TradeDirection.SHORT),
   
 ])
 def test_not_equal_inputs(input_str, expected):
@@ -67,10 +67,10 @@ def test_not_equal_inputs(input_str, expected):
 
 @pytest.mark.parametrize("input_str,expected", [
     
-    (LongShort.BOTH,LongShort.LONG),
-    (LongShort.LONG, LongShort.SHORT),  # Case-sensitive
-    (LongShort.SHORT,LongShort.NONE),
-    (LongShort.LONG | LongShort.SHORT, LongShort.NONE)
+    (TradeDirection.BOTH,TradeDirection.LONG),
+    (TradeDirection.LONG, TradeDirection.SHORT),  # Case-sensitive
+    (TradeDirection.SHORT,TradeDirection.NONE),
+    (TradeDirection.LONG | TradeDirection.SHORT, TradeDirection.NONE)
   
 ])
 def test_bigthan_inputs(input_str, expected):

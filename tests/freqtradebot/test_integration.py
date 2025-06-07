@@ -252,6 +252,7 @@ def test_dca_buying(default_conf_usdt, ticker_usdt, fee, mocker) -> None:
     # No action - profit raised above 1% (the bar set in the strategy).
     freqtrade.process()
     trade = Trade.get_trades().first()
+    print(trade.orders)
     assert len(trade.orders) == 2
     assert pytest.approx(trade.stake_amount) == 120
     assert trade.orders[0].amount == 30
