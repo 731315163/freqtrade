@@ -6,9 +6,9 @@ from enum import Flag, auto
 import logging
 from collections.abc import Sequence
 from copy import deepcopy
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from threading import Lock
-from typing import cast
+from typing import Callable, cast
 
 import jsonschema
 from pandas import DataFrame
@@ -21,10 +21,10 @@ from freqtrade0.exchange import (
     remove_exchange_credentials,
     timeframe_to_seconds,
 )
-from freqtrade0.resolvers import ExchangeResolver, StrategyResolver
+from freqtrade0.resolvers import  StrategyResolver
 from freqtrade0.strategy import IStrategy
 from freqtrade0.enums import TradeDirection,LoopMode
-
+from freqtrade.resolvers import ExchangeResolver
 from freqtrade.configuration import validate_config_consistency
 from freqtrade.constants import Config, ExchangeConfig
 from freqtrade.edge import Edge
@@ -51,22 +51,25 @@ from freqtrade.util import FtPrecise, MeasureTime, PeriodicCache, dt_now
 from freqtrade.wallets import Wallets
 
 
-logger = logging.getLogger(__name__)
+
 
 import freqtrade.freqtradebot
 
-
+logger = freqtrade.freqtradebot.logger
 class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
     """
     Freqtrade is the main class of the bot.
     This is from here the bot start its logic.
     """
+    
     def __init__(self, config: Config,strategy_type:type|None=None) -> None:
         """
         Init all variables and objects the bot needs to work
         :param config: configuration dict, you can use Configuration.get_config()
         to get the config dict.
         """
+        self.log_cache:dict[str,datetime] = {}
+        self.refresh_period = 60
         self.active_pair_whitelist: list[str] = []
 
         # Init bot state
@@ -80,7 +83,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         if strategy_type:
             self.strategy :IStrategy= StrategyResolver.create_strategy(strategy_type=strategy_type,config=self.config)
         else:
-            self.strategy :IStrategy=cast(IStrategy,  StrategyResolver.load_strategy(self.config))
+            self.strategy :IStrategy=cast(IStrategy, StrategyResolver.load_strategy(self.config))
 
         # Check config consistency here since strategies can set certain options
         try:
@@ -91,7 +94,8 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         self.exchange = ExchangeResolver.load_exchange(
             self.config, exchange_config=exchange_config, load_leverage_tiers=True
         )
-
+        if not self.exchange.reject:
+            raise TypeError("Exchange is must  reject.")
         init_db(self.config["db_url"])
 
         self.wallets = Wallets(self.config, self.exchange)
@@ -181,7 +185,28 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             )
 
         self._measure_execution = MeasureTime(log_took_too_long, timeframe_secs * 0.25)
-        
+    def log_once(self, message: str, logmethod: Callable, force_show: bool = False) -> None:
+        """
+        Logs message - not more often than "refresh_period" to avoid log spamming
+        Logs the log-message as debug as well to simplify debugging.
+        :param message: String containing the message to be sent to the function.
+        :param logmethod: Function that'll be called. Most likely `logger.info`.
+        :param force_show: If True, sends the message regardless of show_output value.
+        :return: None.
+        """
+        now_time = dt_now()
+        if message not in self.log_cache:
+            logmethod(message)
+            self.log_cache[message] = now_time
+        internal = timedelta(seconds=self.refresh_period)
+        delkeys = [] 
+        for k  ,v in self.log_cache.items():
+            if now_time - v > internal:
+                delkeys.append(k)
+            else:
+                break
+        for k in delkeys:
+            del self.log_cache[k]
         
         
     def process(self) -> None:
@@ -201,8 +226,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
 
         self.active_pair_whitelist = self._refresh_active_whitelist(trades)
         pairlist = self.pairlists.create_pair_list(self.active_pair_whitelist)
-        ohlcv_pair_list =self.dataprovider.merge_pairs_helperpairs(pairlist,
-            self.strategy.gather_informative_pairs())
+        ohlcv_pair_list =self.dataprovider.merge_pairs_helperpairs(pairlist,self.strategy.gather_informative_pairs())
         self.dataprovider.refresh_latest_ohlcv(ohlcv_pair_list)
         trade_pair_list = self.dataprovider.merge_pairs_helperpairs(pairlist,self.strategy.gather_informative_trade_pairs())
         self.dataprovider.refresh_latest_trades(trade_pair_list)
@@ -307,7 +331,6 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             return False
         signal,stake_amount,price,entry_tag= result
         if  signal is None or TradeDirection.convert(signal) & direction > TradeDirection.NONE :
-            self.log_once(f" trade_loop,not opening {pair} because of direction mismatch",logger.info)
             return False
         stake_amount = stake_amount if stake_amount else self.wallets.get_trade_stake_amount(
                 pair, self.config["max_open_trades"], self.edge
@@ -339,7 +362,6 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             pair, self.strategy.timeframe, analyzed_df
         )
         if  signal is None  or TradeDirection.convert(signal) & direction > TradeDirection.NONE :
-            self.logger.info(f" trade_loop,not opening {pair} because of direction mismatch")
             return False
         stake_amount = self.wallets.get_trade_stake_amount(
             pair, self.config["max_open_trades"], self.edge
@@ -366,23 +388,27 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
     def enter_positions(self) -> int:
         whitelist = self._get_nolock_whitelist(can_hedge_mode=self.strategy.can_hedge_mode)
         trades_created = 0
+        trades_created_ohlc = 0
         if len(whitelist) > 0:
             for pair,direction in whitelist.items():
                 if  self.get_free_open_trades() <= 0:
-                    break
+                     self.log_once(f"not opening new trade for {pair},free spen trades is less than 0.", logger.info)
                 try:
                     analyzed_df, _ = self.dataprovider.get_analyzed_dataframe(pair=pair, timeframe=self.strategy.timeframe)
+                    latest_time=analyzed_df["date"].iloc[-1]
+                    self.log_once(f"{latest_time} new datetime for {pair}...", logger.info)
+                    
                     with self._exit_lock:
                             loopmode = self.strategy.loop_mode
                             if loopmode | LoopMode.Tick> LoopMode.NONE:                           
                                 trades_created += self._create_trade_bytickle(pair,direction= direction,df= analyzed_df)
                             if loopmode | LoopMode.NewCandle> LoopMode.NONE:
-                                trades_created += self.create_trade(pair,direction= direction,df=analyzed_df)
+                                trades_created_ohlc += self.create_trade(pair,direction= direction,df=analyzed_df)
                 except DependencyException as exception:
                     logger.warning("Unable to create trade for %s: %s", pair, exception)
-                if not trades_created:
+                if  (trades_created+trades_created_ohlc)==0:
                     self.log_once( "Found no enter signals for whitelisted currencies. Trying again...",logger.debug)
-        return trades_created
+        return trades_created+trades_created_ohlc
     def check_and_call_adjust_trade_position(self, trade: Trade):
             """
             Check the implemented trading strategy for adjustment command.
@@ -413,7 +439,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 trade.pair, current_entry_rate, trade.leverage
             )
             stake_available = self.wallets.get_available_stake_amount()
-            logger.debug(f"Calling adjust_trade_position for pair {trade.pair}")
+            self.log_once(f"Calling adjust_trade_position for pair {trade.pair}",logger.info)
             stake_amount, price,order_tag = self.strategy._adjust_trade_position_internal(
                 trade=trade,
                 current_time=datetime.now(timezone.utc),

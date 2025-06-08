@@ -11,4 +11,4 @@ from freqtrade.resolvers.protection_resolver import ProtectionResolver
 
 
 from freqtrade0.resolvers.strategy_resolver import StrategyResolver
-from freqtrade0.resolvers.exchange_resolver import ExchangeResolver
+# from freqtrade0.resolvers.exchange_resolver import ExchangeResolver

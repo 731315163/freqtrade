@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from typing import Literal
 
 from pandas import DataFrame
+from pytz import timezone
 
 import freqtrade.strategy
 from freqtrade.constants import Config, ListPairsWithTimeframes
@@ -25,7 +26,7 @@ from freqtrade.strategy.informative_decorator import (
 from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 from freqtrade.util.datetime_helpers import dt_now
 from freqtrade0.enums import LoopMode
-
+from freqtrade.strategy.interface import remove_entry_exit_signals
 logger = logging.getLogger(__name__)
 
 
@@ -185,6 +186,7 @@ class IStrategy(freqtrade.strategy.IStrategy):
         """
         wrapper around adjust_trade_position to handle the return value
         """
+        lastes,latest_time= self.get_latest_candle(pair,self.timeframe,df)
         resp = strategy_safe_wrapper(
             self.loop_entry, default_retval=(None, ""), supress_error=True
         )(
@@ -207,7 +209,47 @@ class IStrategy(freqtrade.strategy.IStrategy):
                 return None
         
         return result
-    
+    def _analyze_ticker_internal(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+        """
+        Parses the given candle (OHLCV) data and returns a populated DataFrame
+        add several TA indicators and buy signal to it
+        WARNING: Used internally only, may skip analysis if `process_only_new_candles` is set.
+        :param dataframe: Dataframe containing data from exchange
+        :param metadata: Metadata dictionary with additional data (e.g. 'pair')
+        :return: DataFrame of candle (OHLCV) data with indicator data and signals added
+        """
+        pair = str(metadata.get("pair"))
+        _last_seen = self._last_candle_seen_per_pair.get(pair, datetime.min.replace(tzinfo=timezone("UTC")))
+        last_date = dataframe.iloc[-1]["date"]
+        new_candle = False
+        if last_date > _last_seen:
+            new_candle = True
+        elif last_date < _last_seen:
+            raise ValueError(
+                f"Last candle seen for {pair} is {_last_seen}, "
+                f"but last candle in dataframe is {last_date}"
+            )
+         
+            
+        # Test if seen this pair and last candle before.
+        # always run if process_only_new_candles is set to false
+        if not self.process_only_new_candles or new_candle:
+            # Defs that only make change on new candle data.
+            dataframe = self.analyze_ticker(dataframe, metadata)
+
+            self._last_candle_seen_per_pair[pair] = dataframe.iloc[-1]["date"]
+
+            candle_type = self.config.get("candle_type_def", CandleType.SPOT)
+            self.dp._set_cached_df(pair, self.timeframe, dataframe, candle_type=candle_type)
+            self.dp._emit_df((pair, self.timeframe, candle_type), dataframe, new_candle)
+
+        else:
+            logger.debug("Skipping TA Analysis for already analyzed candle")
+            dataframe = remove_entry_exit_signals(dataframe)
+
+        logger.debug("Loop Analysis Launched")
+
+        return dataframe
     def _adjust_trade_position_internal(
         self,
         trade: Trade,
@@ -279,14 +321,14 @@ class IStrategy(freqtrade.strategy.IStrategy):
         :return: (None, None) or (Dataframe, latest_date) - corresponding to the last candle
         """
         if not isinstance(dataframe, DataFrame) or dataframe.empty:
-            logger.warning(f"Empty candle (OHLCV) data for pair {pair}")
+            logger.error(f"Empty candle (OHLCV) data for pair {pair}")
             return None, None
 
         try:
             latest_date_pd = dataframe["date"].max()
             latest = dataframe.loc[dataframe["date"] == latest_date_pd].iloc[-1]
         except Exception as e:
-            logger.warning(f"Unable to get latest candle (OHLCV) data for pair {pair} - {e}")
+            logger.error(f"Unable to get latest candle (OHLCV) data for pair {pair} - {e}")
             return None, None
         # Explicitly convert to datetime object to ensure the below comparison does not fail
         latest_date: datetime = latest_date_pd.to_pydatetime()

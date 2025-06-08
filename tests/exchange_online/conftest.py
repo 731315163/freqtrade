@@ -4,8 +4,8 @@ from pathlib import Path
 import pytest
 
 from freqtrade.constants import Config
-from freqtrade.exchange.exchange import Exchange
-from freqtrade.resolvers.exchange_resolver import ExchangeResolver
+from freqtrade0.exchange.exchange import Exchange
+from freqtrade0.resolvers.exchange_resolver import ExchangeResolver
 from tests.conftest import EXMS, get_default_conf_usdt
 
 

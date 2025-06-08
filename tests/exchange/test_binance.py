@@ -1091,7 +1091,7 @@ async def test__async_get_trade_history_id_binance_fast(
 
     pair = "ETH/BTC"
     mocker.patch(
-        "freqtrade.exchange.binance.download_archive_trades",
+        "freqtrade0.exchange.binance.download_archive_trades",
         return_value=(pair, trades_dict_to_list(fetch_trades_result[-2:])),
     )
 

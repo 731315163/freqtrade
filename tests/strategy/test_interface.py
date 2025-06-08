@@ -10,14 +10,14 @@ from pandas import DataFrame
 
 from freqtrade.configuration import TimeRange
 from freqtrade.constants import CUSTOM_TAG_MAX_LENGTH
-from freqtrade.data.dataprovider import DataProvider
+
 from freqtrade.data.history import load_data
 from freqtrade.enums import ExitCheckTuple, ExitType, HyperoptState, SignalDirection
 from freqtrade.exceptions import OperationalException, StrategyError
 from freqtrade.optimize.hyperopt_tools import HyperoptStateContainer
 from freqtrade.optimize.space import SKDecimal
 from freqtrade.persistence import PairLocks, Trade
-from freqtrade.resolvers import StrategyResolver
+
 from freqtrade.strategy.hyper import detect_parameters
 from freqtrade.strategy.parameters import (
     BaseParameter,
@@ -31,8 +31,8 @@ from freqtrade.util import dt_now
 from tests.conftest import CURRENT_TEST_STRATEGY, TRADE_SIDES, log_has, log_has_re
 
 from .strats.strategy_test_v3 import StrategyTestV3
-
-
+from freqtrade0.resolvers import StrategyResolver
+from freqtrade0.data.dataprovider import DataProvider
 # Avoid to reinit the same object again and again
 _STRATEGY = StrategyTestV3(config={})
 _STRATEGY.dp = DataProvider({}, None, None)
@@ -124,7 +124,7 @@ def test_returns_latest_signal(ohlcv_history):
 def test_analyze_pair_empty(mocker, caplog, ohlcv_history):
     mocker.patch.object(_STRATEGY.dp, "ohlcv", return_value=ohlcv_history)
     mocker.patch.object(_STRATEGY, "_analyze_ticker_internal", return_value=DataFrame([]))
-    mocker.patch.object(_STRATEGY, "assert_df")
+    # mocker.patch.object(_STRATEGY, "assert_df")
 
     _STRATEGY.analyze_pair("ETH/BTC")
 
@@ -174,7 +174,6 @@ def test_get_signal_old_dataframe(default_conf, mocker, caplog, ohlcv_history):
     mocked_history.loc[1, "enter_long"] = 1
 
     caplog.set_level(logging.INFO)
-    mocker.patch.object(_STRATEGY, "assert_df")
 
     assert (None, None) == _STRATEGY.get_latest_candle(
         "xyz", default_conf["timeframe"], mocked_history
@@ -194,7 +193,6 @@ def test_get_signal_no_sell_column(default_conf, mocker, caplog, ohlcv_history):
     mocked_history.loc[1, "enter_long"] = 1
 
     caplog.set_level(logging.INFO)
-    mocker.patch.object(_STRATEGY, "assert_df")
 
     assert (SignalDirection.LONG, None) == _STRATEGY.get_entry_signal(
         "xyz", default_conf["timeframe"], mocked_history
@@ -237,7 +235,7 @@ def test_assert_df_raise(mocker, caplog, ohlcv_history):
     caplog.set_level(logging.INFO)
     mocker.patch.object(_STRATEGY.dp, "ohlcv", return_value=ohlcv_history)
     mocker.patch.object(_STRATEGY.dp, "get_analyzed_dataframe", return_value=(mocked_history, 0))
-    mocker.patch.object(_STRATEGY, "assert_df", side_effect=StrategyError("Dataframe returned..."))
+    # mocker.patch.object(_STRATEGY, "assert_df", side_effect=StrategyError("Dataframe returned..."))
     _STRATEGY.analyze_pair("xyz")
     assert log_has(
         "Unable to analyze candle (OHLCV) data for pair xyz: Dataframe returned...", caplog
@@ -790,7 +788,7 @@ def test__analyze_ticker_internal_skip_analyze(ohlcv_history, mocker, caplog) ->
     entry_mock = MagicMock(side_effect=lambda x, meta: x)
     exit_mock = MagicMock(side_effect=lambda x, meta: x)
     mocker.patch.multiple(
-        "freqtrade.strategy.interface.IStrategy",
+        "freqtrade0.strategy.interface.IStrategy",
         advise_indicators=ind_mock,
         advise_entry=entry_mock,
         advise_exit=exit_mock,

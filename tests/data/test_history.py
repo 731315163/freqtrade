@@ -155,7 +155,7 @@ def test_load_data_with_new_pair_1min(
 
 
 def test_testdata_path(testdatadir) -> None:
-    assert str(Path("tests0") / "testdata") in str(testdatadir)
+    assert str(Path("tests") / "testdata") in str(testdatadir)
 
 
 @pytest.mark.parametrize(
