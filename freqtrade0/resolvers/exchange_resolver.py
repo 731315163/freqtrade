@@ -5,16 +5,30 @@ This module loads custom exchanges
 import logging
 from inspect import isclass
 from typing import Any
+from types import MethodType
+from freqtrade.enums.candletype import CandleType
 
-import freqtrade0.exchange as exchanges
 from freqtrade.constants import Config, ExchangeConfig
-from freqtrade0.exchange import MAP_EXCHANGE_CHILDCLASS, Exchange
+
 from freqtrade.resolvers.iresolver import IResolver
 
 
+from freqtrade0.exchange import MAP_EXCHANGE_CHILDCLASS, Exchange
+import freqtrade0.exchange as exchanges
 logger = logging.getLogger(__name__)
 
-
+def _now_is_time_to_refresh_trades(
+            self, pair: str, timeframe: str, candle_type: CandleType
+        ) -> bool:  # Timeframe in seconds
+            logger.info("----------------------------------------class reject _now_is_time_to_refresh_trades True")
+            return True
+            # trades = self.trades((pair, timeframe, candle_type), False)
+            # pair_last_refreshed = int(trades.iloc[-1]["timestamp"])
+            # full_candle = (
+            #     int(timeframe_to_next_date(timeframe, dt_from_ts(pair_last_refreshed)).timestamp())
+            #     * 1000
+            # )
+Exchange._now_is_time_to_refresh_trades = _now_is_time_to_refresh_trades
 class ExchangeResolver(IResolver):
     """
     This class contains all the logic to load a custom exchange class
@@ -70,13 +84,20 @@ class ExchangeResolver(IResolver):
         :param exchange_name: name of the module to import
         :return: Exchange instance or None
         """
-
+        
+        def _now_is_time_to_refresh_trades(
+            self, pair: str, timeframe: str, candle_type: CandleType
+        ) -> bool:  # Timeframe in seconds
+            logger.info("instance reject _now_is_time_to_refresh_trades True")
+            return True
         try:
             ex_class = getattr(exchanges, exchange_name)
 
             exchange = ex_class(**kwargs)
             if exchange:
                 logger.info(f"Using resolved exchange '{exchange_name}'...")
+                # exchange._now_is_time_to_refresh_trades = MethodType(_now_is_time_to_refresh_trades, exchange)
+                exchange._now_is_time_to_refresh_trades("", "", CandleType.FUTURES)
                 return exchange
         except AttributeError:
             # Pass and raise ImportError instead

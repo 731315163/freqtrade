@@ -797,7 +797,7 @@ def test__analyze_ticker_internal_skip_analyze(ohlcv_history, mocker, caplog) ->
     strategy.dp = DataProvider({}, None, None)
     strategy.process_only_new_candles = True
 
-    ret = strategy._analyze_ticker_internal(ohlcv_history, {"pair": "ETH/BTC"})
+    ret,_ = strategy._analyze_ticker_internal(ohlcv_history, {"pair": "ETH/BTC"})
     assert "high" in ret.columns
     assert "low" in ret.columns
     assert "close" in ret.columns
@@ -809,7 +809,7 @@ def test__analyze_ticker_internal_skip_analyze(ohlcv_history, mocker, caplog) ->
     assert not log_has("Skipping TA Analysis for already analyzed candle", caplog)
     caplog.clear()
 
-    ret = strategy._analyze_ticker_internal(ohlcv_history, {"pair": "ETH/BTC"})
+    ret,_ = strategy._analyze_ticker_internal(ohlcv_history, {"pair": "ETH/BTC"})
     # No analysis happens as process_only_new_candles is true
     assert ind_mock.call_count == 1
     assert entry_mock.call_count == 1

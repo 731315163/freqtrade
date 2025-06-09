@@ -6,7 +6,7 @@ import talib.abstract as ta
 from pandas import DataFrame
 
 from freqtrade.strategy import DecimalParameter, IntParameter
-from freqtrade.strategy.interface import IStrategy
+from freqtrade0.strategy.interface import IStrategy
 
 logger = logging.getLogger(__name__)
 

@@ -4,30 +4,53 @@ This module defines the interface to apply for strategies
 """
 
 import logging
-from datetime import datetime, timedelta
+from abc import ABC, abstractmethod
+from datetime import datetime, timedelta, timezone
+from math import isinf, isnan
 from typing import Literal
 
 from pandas import DataFrame
-from pytz import timezone
+from pydantic import ValidationError
 
 import freqtrade.strategy
-from freqtrade.constants import Config, ListPairsWithTimeframes
+from freqtrade.constants import CUSTOM_TAG_MAX_LENGTH, Config, IntOrInf, ListPairsWithTimeframes
+from freqtrade.data.converter import populate_dataframe_with_trades
+from freqtrade.data.converter.converter import reduce_dataframe_footprint
+from freqtrade.data.dataprovider import DataProvider
 from freqtrade.enums import (
     CandleType,
+    ExitCheckTuple,
+    ExitType,
+    MarketDirection,
+    RunMode,
+    SignalDirection,
+    SignalTagType,
+    SignalType,
+    TradingMode,
 )
-from freqtrade.exceptions import OperationalException
-from freqtrade.exchange import timeframe_to_minutes
-from freqtrade.persistence.trade_model import Trade
+from freqtrade.exceptions import OperationalException, StrategyError
+from freqtrade.exchange import timeframe_to_minutes, timeframe_to_next_date, timeframe_to_seconds
+from freqtrade.ft_types import AnnotationType
+from freqtrade.misc import remove_entry_exit_signals
+from freqtrade.persistence import Order, PairLocks, Trade
+from freqtrade.strategy.hyper import HyperStrategyMixin
 from freqtrade.strategy.informative_decorator import (
     InformativeData,
     PopulateIndicators,
+    _create_and_merge_informative_pair,
     _format_pair_name,
 )
-from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
-from freqtrade.util.datetime_helpers import dt_now
-from freqtrade0.enums import LoopMode
 from freqtrade.strategy.interface import remove_entry_exit_signals
+from freqtrade.strategy.strategy_validation import StrategyResultValidator
+from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
+from freqtrade.util import dt_now
+from freqtrade.util.datetime_helpers import dt_now
+from freqtrade.wallets import Wallets
+
+
 logger = logging.getLogger(__name__)
+
+from freqtrade0.enums import LoopMode
 
 
 class IStrategy(freqtrade.strategy.IStrategy):
@@ -44,7 +67,7 @@ class IStrategy(freqtrade.strategy.IStrategy):
    
 
     can_hedge_mode: bool = False
-    loop_mode:LoopMode = LoopMode.BOTH
+    loop_mode:LoopMode = LoopMode.NewCandle
     def __init__(self, config: Config) -> None:
         self.config = config
         # Dict to determine if analysis is necessary
@@ -144,40 +167,8 @@ class IStrategy(freqtrade.strategy.IStrategy):
         signal_name: str
         '''
         pass
-    # def cache_dataframe(self, dataframe: DataFrame, pair:str,side:Literal["long","short"],tag="") -> DataFrame|None:
-    #     """
-    #     Parses the given candle (OHLCV) data and returns a populated DataFrame
-    #     add several TA indicators and buy signal to it
-    #     WARNING: Used internally only, may skip analysis if `process_only_new_candles` is set.
-    #     :param dataframe: Dataframe containing data from exchange
-    #     :param metadata: Metadata dictionary with additional data (e.g. 'pair')
-    #     :return: DataFrame of candle (OHLCV) data with indicator data and signals added
-    #     """
-    #     if  "enter_long" not in dataframe.columns  :
-    #         dataframe = dataframe.rename({"buy": "enter_long", "buy_tag": "enter_tag","sell":"enter_short","sell_tag":""}, axis="columns")
-    #     elif "enter_short" not in dataframe.columns:
-    #         dataframe = dataframe.rename({"buy": "enter_long", "buy_tag": "enter_tag","sell":"enter_short","sell_tag":""}, axis="columns")
-        
-        # last_index = dataframe.index[-1]
-        # if side == "long" and "enter_long" in dataframe.columns and dataframe.at[last_index,"enter_long"] == 1:
-        #     return None
-        # if side == "short" and "enter_short"  in dataframe.columns and  dataframe.at[last_index,"enter_short"] == 1:
-        #     return None
-        
-        # if side == "long":
-        #     dataframe.at[last_index,"enter_long"] =1
-        # else:
-        #     dataframe.at[last_index,"enter_short"]=1
-        # dataframe.at[last_index,"enter_tag"] = tag
-       
-        # Test if seen this pair and last candle before.
-        # always run if process_only_new_candles is set to false
-     
-        # candle_type = self.config.get("candle_type_def", CandleType.SPOT)
-        # self.dp._set_cached_df(pair, self.timeframe, dataframe, candle_type=candle_type)
-        # self.dp._emit_df((pair, self.timeframe, candle_type), dataframe, True)
+   
 
-        # return dataframe
     def _loop_entry(
         self,pair:str,timestamp:datetime,
         df :DataFrame,
@@ -191,7 +182,7 @@ class IStrategy(freqtrade.strategy.IStrategy):
             self.loop_entry, default_retval=(None, ""), supress_error=True
         )(
            pair = pair,timestamp = timestamp,
-            **kwargs,
+            **kwargs
         )
         
         result = None
@@ -209,7 +200,18 @@ class IStrategy(freqtrade.strategy.IStrategy):
                 return None
         
         return result
-    def _analyze_ticker_internal(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
+    
+    def populate_all(self, dataframes:dict[str,tuple[ DataFrame,bool]], **kwargs) ->dict[str,tuple[ DataFrame,bool]]:
+        return dataframes
+         
+    def _analyze_all_signals(self, dataframes:dict[str,tuple[ DataFrame,bool]],candle_type, **kwargs) ->dict[str, tuple[ DataFrame,bool]]:
+        result_dataframe= self.populate_all(dataframes, **kwargs)
+        for pair, (dataframe,new_candle) in result_dataframe.items():
+            self.dp._set_cached_df(pair, self.timeframe, dataframe, candle_type=candle_type)
+            self.dp._emit_df((pair, self.timeframe, candle_type), dataframe, new_candle)
+
+
+    def _analyze_ticker_signals(self, dataframe: DataFrame, metadata: dict) :
         """
         Parses the given candle (OHLCV) data and returns a populated DataFrame
         add several TA indicators and buy signal to it
@@ -219,7 +221,7 @@ class IStrategy(freqtrade.strategy.IStrategy):
         :return: DataFrame of candle (OHLCV) data with indicator data and signals added
         """
         pair = str(metadata.get("pair"))
-        _last_seen = self._last_candle_seen_per_pair.get(pair, datetime.min.replace(tzinfo=timezone("UTC")))
+        _last_seen = self._last_candle_seen_per_pair.get(pair, datetime.min.replace(tzinfo=timezone.utc))
         last_date = dataframe.iloc[-1]["date"]
         new_candle = False
         if last_date > _last_seen:
@@ -236,20 +238,58 @@ class IStrategy(freqtrade.strategy.IStrategy):
         if not self.process_only_new_candles or new_candle:
             # Defs that only make change on new candle data.
             dataframe = self.analyze_ticker(dataframe, metadata)
-
             self._last_candle_seen_per_pair[pair] = dataframe.iloc[-1]["date"]
-
-            candle_type = self.config.get("candle_type_def", CandleType.SPOT)
-            self.dp._set_cached_df(pair, self.timeframe, dataframe, candle_type=candle_type)
-            self.dp._emit_df((pair, self.timeframe, candle_type), dataframe, new_candle)
 
         else:
             logger.debug("Skipping TA Analysis for already analyzed candle")
             dataframe = remove_entry_exit_signals(dataframe)
 
-        logger.debug("Loop Analysis Launched")
+        return dataframe,new_candle
+    def process_pair_data(self, pair: str,dataframe:DataFrame) :
+        """
+        Stores the dataframe into the dataprovider.
+        The analyzed dataframe is then accessible via `dp.get_analyzed_dataframe()`.
+        :param pair: Pair to analyze.
+        """
+      
+        if not isinstance(dataframe, DataFrame) or dataframe.empty:
+            logger.warning("Empty candle (OHLCV) data for pair %s", pair)
+            return ()
 
-        return dataframe
+        try:
+            validator = StrategyResultValidator(  dataframe, warn_only=not self.disable_dataframe_checks)
+
+            dataframe,new_candle = strategy_safe_wrapper(self._analyze_ticker_signals, message="")(dataframe, {"pair": pair})
+
+            validator.assert_df(dataframe)
+        except StrategyError as error:
+            logger.warning(f"Unable to analyze candle (OHLCV) data for pair {pair}: {error}")
+            return ()
+
+        if dataframe.empty:
+            logger.warning("Empty dataframe for pair %s", pair)
+            return ()
+        return dataframe,new_candle
+        
+
+    def analyze(self, pairs: list[str]) -> None:
+        """
+        Analyze all pairs using analyze_pair().
+        :param pairs: List of pairs to analyze
+        """
+        candle_type=self.config.get("candle_type_def", CandleType.SPOT)
+        pair_data = {}
+        for pair in pairs:
+            dataframe = self.dp.ohlcv(
+            pair, self.timeframe, candle_type=candle_type
+        )
+            result =  self.process_pair_data(pair, dataframe)
+            if len(result) > 0:
+                dataframe,new_candle =result
+                pair_data[pair]=( dataframe,new_candle)
+        pair_data = self._analyze_all_signals(dataframes=pair_data,candle_type=candle_type)
+       
+
     def _adjust_trade_position_internal(
         self,
         trade: Trade,
@@ -266,7 +306,7 @@ class IStrategy(freqtrade.strategy.IStrategy):
     ) -> tuple[float | None, float,str]:
         """
         wrapper around adjust_trade_position to handle the return value
-        curreny_profit 参数是所有成交顶订单的总利润，不只是剩余订单的利润，原版位剩余订单利润，请注意
+        profit_struc in kwargs 参数是所有成交顶订单的总利润，不只是剩余订单的利润，原版位剩余订单利润，请注意
         """
         resp = strategy_safe_wrapper(
             self.adjust_trade_position, default_retval=(None,current_rate, ""), supress_error=True
@@ -335,12 +375,10 @@ class IStrategy(freqtrade.strategy.IStrategy):
 
         # Check if dataframe is out of date
         timeframe_minutes = timeframe_to_minutes(timeframe)
-        offset = self.config.get("exchange", {}).get("outdated_offset", 1)
+        offset = self.config.get("exchange", {}).get("outdated_offset", 2)
         if latest_date < (dt_now() - timedelta(minutes=timeframe_minutes * 2 + offset)):
             logger.critical(
-                "Outdated history for pair %s. Last tick is %s minutes old",
-                pair,
-                int((dt_now() - latest_date).total_seconds() // 60),
-            )
+                f"Outdated history for {pair} pair. Last tick is {int((dt_now() - latest_date).total_seconds() // 60)} minutes old"
+                            )
             return None, None
         return latest, latest_date

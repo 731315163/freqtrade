@@ -15,16 +15,17 @@ from pandas import DataFrame
 from schedule import Scheduler
 
 from freqtrade import constants
+from freqtrade.enums.candletype import CandleType
+from freqtrade.exchange.exchange import Exchange
 from freqtrade.persistence.trade_model import ProfitStruct
 from freqtrade0.data.dataprovider import DataProvider
 from freqtrade0.exchange import (
     remove_exchange_credentials,
     timeframe_to_seconds,
 )
-from freqtrade0.resolvers import  StrategyResolver
+from freqtrade0.resolvers import  StrategyResolver, ExchangeResolver
 from freqtrade0.strategy import IStrategy
 from freqtrade0.enums import TradeDirection,LoopMode
-from freqtrade.resolvers import ExchangeResolver
 from freqtrade.configuration import validate_config_consistency
 from freqtrade.constants import Config, ExchangeConfig
 from freqtrade.edge import Edge
@@ -91,11 +92,11 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         except jsonschema.ValidationError as e :
             logger.error(e)
 
-        self.exchange = ExchangeResolver.load_exchange(
+      
+      
+        self.exchange: Exchange = ExchangeResolver.load_exchange(
             self.config, exchange_config=exchange_config, load_leverage_tiers=True
         )
-        if not self.exchange.reject:
-            raise TypeError("Exchange is must  reject.")
         init_db(self.config["db_url"])
 
         self.wallets = Wallets(self.config, self.exchange)
@@ -195,18 +196,18 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         :return: None.
         """
         now_time = dt_now()
-        if message not in self.log_cache:
-            logmethod(message)
-            self.log_cache[message] = now_time
         internal = timedelta(seconds=self.refresh_period)
         delkeys = [] 
         for k  ,v in self.log_cache.items():
             if now_time - v > internal:
                 delkeys.append(k)
-            else:
-                break
         for k in delkeys:
             del self.log_cache[k]
+        if message not in self.log_cache:
+            logmethod(message)
+            self.log_cache[message] = now_time
+     
+       
         
         
     def process(self) -> None:
@@ -389,14 +390,23 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         whitelist = self._get_nolock_whitelist(can_hedge_mode=self.strategy.can_hedge_mode)
         trades_created = 0
         trades_created_ohlc = 0
+        refrence_ohlc = {}
         if len(whitelist) > 0:
             for pair,direction in whitelist.items():
-                if  self.get_free_open_trades() <= 0:
-                     self.log_once(f"not opening new trade for {pair},free spen trades is less than 0.", logger.info)
+                
                 try:
                     analyzed_df, _ = self.dataprovider.get_analyzed_dataframe(pair=pair, timeframe=self.strategy.timeframe)
-                    latest_time=analyzed_df["date"].iloc[-1]
-                    self.log_once(f"{latest_time} new datetime for {pair}...", logger.info)
+                    if not analyzed_df.empty and "date" in analyzed_df.columns:
+                        latest_time=analyzed_df["date"].iloc[-1]
+                        pair_list = refrence_ohlc.get(latest_time,[])
+                        pair_list.append(pair)
+                        refrence_ohlc[latest_time]=pair_list
+                    else:
+                        self.log_once(f"Found no ohlc data for {pair},unable to create trade.", logger.debug)
+                    
+                    if  self.get_free_open_trades() <= 0:
+                        self.log_once(f"not opening new trade for {pair},free open trades is less than 0.", logger.info)
+                        break
                     
                     with self._exit_lock:
                             loopmode = self.strategy.loop_mode
@@ -406,8 +416,15 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                                 trades_created_ohlc += self.create_trade(pair,direction= direction,df=analyzed_df)
                 except DependencyException as exception:
                     logger.warning("Unable to create trade for %s: %s", pair, exception)
-                if  (trades_created+trades_created_ohlc)==0:
-                    self.log_once( "Found no enter signals for whitelisted currencies. Trying again...",logger.debug)
+            
+            msg=""
+            for t,p in refrence_ohlc.items():
+                p_str = ",".join(p)
+                msg+=f"{t}:{p_str}\n"
+            if (trades_created+trades_created_ohlc)==0:
+                self.log_once( f"Found no enter signals for whitelisted currencies. Trying again...{msg}",logger.debug)
+            else:
+                self.log_once(f"refresh data {msg}...", logger.info)
         return trades_created+trades_created_ohlc
     def check_and_call_adjust_trade_position(self, trade: Trade):
             """
@@ -418,11 +435,11 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             current_entry_rate, current_exit_rate = self.exchange.get_rates(
                 trade.pair, True, trade.is_short
             )
+            current_entry_profit_struc: ProfitStruct = ProfitStruct(0,0,0,0)
             match len(trade.select_filled_orders()) :
                 case l if l < 1:
                     current_profit= 0
                     current_exit_profit = 0
-                    current_entry_profit_struc: ProfitStruct = ProfitStruct(0,0,0,0)
                 case _:
                     current_profit = trade.calc_profit_ratio(current_entry_rate)
                     current_exit_profit = trade.calc_profit_ratio(current_exit_rate)
@@ -450,7 +467,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 current_entry_rate=current_entry_rate,
                 current_exit_rate=current_exit_rate,
                 current_entry_profit=current_profit,
-                current_exit_profit=current_exit_profit,kwargs={"profit":current_entry_profit_struc}
+                current_exit_profit=current_exit_profit,profit_struc=current_entry_profit_struc
             )
 
             if stake_amount is not None and stake_amount > 0.0:
