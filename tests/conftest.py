@@ -18,16 +18,9 @@ from freqtrade import constants
 from freqtrade.data.converter import ohlcv_to_dataframe, trades_list_to_df
 from freqtrade.edge import PairInfo
 from freqtrade.enums import CandleType, MarginMode, RunMode, SignalDirection, TradingMode
+from freqtrade.exchange import Exchange, timeframe_to_minutes, timeframe_to_seconds
 from freqtrade.persistence import LocalTrade, Order, Trade, init_db
 from freqtrade.util import dt_now, dt_ts
-
-from freqtrade0.commands import Arguments
-from freqtrade0.exchange import Exchange, timeframe_to_minutes, timeframe_to_seconds
-from freqtrade0.freqtradebot import FreqtradeBot
-
-from freqtrade0.resolvers import ExchangeResolver
-
-from freqtrade0.worker import Worker
 from tests.conftest_trades import (
     leverage_trade,
     mock_trade_1,
@@ -48,7 +41,10 @@ from tests.conftest_trades_usdt import (
     mock_trade_usdt_7,
 )
 
-
+from freqtrade0.commands import Arguments
+from freqtrade0.freqtradebot import FreqtradeBot
+from freqtrade0.resolvers import ExchangeResolver
+from freqtrade0.worker import Worker
 logging.getLogger("").setLevel(logging.INFO)
 
 

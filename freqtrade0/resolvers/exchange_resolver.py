@@ -13,8 +13,8 @@ from freqtrade.constants import Config, ExchangeConfig
 from freqtrade.resolvers.iresolver import IResolver
 
 
-from freqtrade0.exchange import MAP_EXCHANGE_CHILDCLASS, Exchange
-import freqtrade0.exchange as exchanges
+from freqtrade.exchange import MAP_EXCHANGE_CHILDCLASS, Exchange
+import freqtrade.exchange as exchanges
 logger = logging.getLogger(__name__)
 
 def _now_is_time_to_refresh_trades(

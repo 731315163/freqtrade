@@ -2,9 +2,6 @@
 Freqtrade is the main module of this bot. It contains the class Freqtrade()
 """
 
-from enum import Flag, auto
-import logging
-from collections.abc import Sequence
 from copy import deepcopy
 from datetime import datetime, time, timedelta, timezone
 from threading import Lock
@@ -14,18 +11,8 @@ import jsonschema
 from pandas import DataFrame
 from schedule import Scheduler
 
-from freqtrade import constants
-from freqtrade.enums.candletype import CandleType
-from freqtrade.exchange.exchange import Exchange
-from freqtrade.persistence.trade_model import ProfitStruct
-from freqtrade0.data.dataprovider import DataProvider
-from freqtrade0.exchange import (
-    remove_exchange_credentials,
-    timeframe_to_seconds,
-)
-from freqtrade0.resolvers import  StrategyResolver, ExchangeResolver
-from freqtrade0.strategy import IStrategy
-from freqtrade0.enums import TradeDirection,LoopMode
+import freqtrade.freqtradebot
+
 from freqtrade.configuration import validate_config_consistency
 from freqtrade.constants import Config, ExchangeConfig
 from freqtrade.edge import Edge
@@ -35,14 +22,20 @@ from freqtrade.enums import (
     MarginMode,
     SignalDirection,
     State,
-    TradingMode,MarketDirection
+    TradingMode,
 )
 from freqtrade.exceptions import (
     DependencyException,
 )
+from freqtrade.exchange import (
+    remove_exchange_credentials,
+    timeframe_to_seconds,
+)
+from freqtrade.exchange.exchange import Exchange
 from freqtrade.mixins import LoggingMixin
 from freqtrade.persistence import PairLocks, Trade, init_db
 from freqtrade.persistence.models import PairLock
+from freqtrade.persistence.trade_model import ProfitStruct
 from freqtrade.plugins.pairlistmanager import PairListManager
 from freqtrade.plugins.protectionmanager import ProtectionManager
 from freqtrade.rpc import RPCManager
@@ -52,9 +45,10 @@ from freqtrade.util import FtPrecise, MeasureTime, PeriodicCache, dt_now
 from freqtrade.wallets import Wallets
 
 
-
-
-import freqtrade.freqtradebot
+from freqtrade0.data.dataprovider import DataProvider
+from freqtrade0.enums import LoopMode, TradeDirection
+from freqtrade0.resolvers import ExchangeResolver, StrategyResolver
+from freqtrade0.strategy import IStrategy
 
 logger = freqtrade.freqtradebot.logger
 class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):

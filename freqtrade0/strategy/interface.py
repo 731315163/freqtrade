@@ -67,7 +67,7 @@ class IStrategy(freqtrade.strategy.IStrategy):
    
 
     can_hedge_mode: bool = False
-    loop_mode:LoopMode = LoopMode.NewCandle
+    loop_mode:LoopMode = LoopMode.All
     def __init__(self, config: Config) -> None:
         self.config = config
         # Dict to determine if analysis is necessary

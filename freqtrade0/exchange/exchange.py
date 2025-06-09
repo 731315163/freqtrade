@@ -170,8 +170,9 @@ class Exchange(freqtrade.exchange.Exchange):
     def _now_is_time_to_refresh_trades(
         self, pair: str, timeframe: str, candle_type: CandleType
     ) -> bool:  # Timeframe in seconds
-        trades = self.trades((pair, timeframe, candle_type), False)
         return True
+        trades = self.trades((pair, timeframe, candle_type), False)
+        
         pair_last_refreshed = int(trades.iloc[-1]["timestamp"])
         full_candle = (
             int(timeframe_to_next_date(timeframe, dt_from_ts(pair_last_refreshed)).timestamp())

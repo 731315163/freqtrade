@@ -23,7 +23,7 @@ from freqtrade.exceptions import (
     PricingError,
     TemporaryError,
 )
-from freqtrade0.exchange import (
+from freqtrade.exchange import (
     Binance,
     Bybit,
     Exchange,
