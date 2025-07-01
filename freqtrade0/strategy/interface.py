@@ -3,57 +3,36 @@ IStrategy interface
 This module defines the interface to apply for strategies
 """
 
-import logging
-from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
-from math import isinf, isnan
 from typing import Literal
 
 from pandas import DataFrame
-from pydantic import ValidationError
 
-import freqtrade.strategy
-from freqtrade.constants import CUSTOM_TAG_MAX_LENGTH, Config, IntOrInf, ListPairsWithTimeframes
-from freqtrade.data.converter import populate_dataframe_with_trades
-from freqtrade.data.converter.converter import reduce_dataframe_footprint
-from freqtrade.data.dataprovider import DataProvider
+from freqtrade.constants import Config, ListPairsWithTimeframes
 from freqtrade.enums import (
     CandleType,
-    ExitCheckTuple,
-    ExitType,
-    MarketDirection,
-    RunMode,
-    SignalDirection,
-    SignalTagType,
-    SignalType,
-    TradingMode,
 )
 from freqtrade.exceptions import OperationalException, StrategyError
-from freqtrade.exchange import timeframe_to_minutes, timeframe_to_next_date, timeframe_to_seconds
-from freqtrade.ft_types import AnnotationType
+from freqtrade.exchange import timeframe_to_minutes
 from freqtrade.misc import remove_entry_exit_signals
-from freqtrade.persistence import Order, PairLocks, Trade
-from freqtrade.strategy.hyper import HyperStrategyMixin
+from freqtrade.persistence import Trade
 from freqtrade.strategy.informative_decorator import (
     InformativeData,
     PopulateIndicators,
-    _create_and_merge_informative_pair,
     _format_pair_name,
 )
-from freqtrade.strategy.interface import remove_entry_exit_signals
+from freqtrade.strategy.interface import remove_entry_exit_signals,logger
 from freqtrade.strategy.strategy_validation import StrategyResultValidator
 from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 from freqtrade.util import dt_now
 from freqtrade.util.datetime_helpers import dt_now
-from freqtrade.wallets import Wallets
+from freqtrade import strategy
 
 
-logger = logging.getLogger(__name__)
 
 from freqtrade0.enums import LoopMode
 
-
-class IStrategy(freqtrade.strategy.IStrategy):
+class IStrategy(strategy.IStrategy):
     """
     Interface for freqtrade strategies
     Defines the mandatory structure must follow any custom strategies
@@ -66,7 +45,7 @@ class IStrategy(freqtrade.strategy.IStrategy):
 
    
 
-    can_hedge_mode: bool = False
+    can_hedge_mode: bool = True
     loop_mode:LoopMode = LoopMode.All
     def __init__(self, config: Config) -> None:
         self.config = config
@@ -171,13 +150,13 @@ class IStrategy(freqtrade.strategy.IStrategy):
 
     def _loop_entry(
         self,pair:str,timestamp:datetime,
-        df :DataFrame,
+        df :DataFrame|None,
         **kwargs
     ) -> tuple[Literal["long","short"]|None,float|None,float|None,str|None]|None:
         """
         wrapper around adjust_trade_position to handle the return value
         """
-        lastes,latest_time= self.get_latest_candle(pair,self.timeframe,df)
+        # lastes,latest_time= self.get_latest_candle(pair,self.timeframe,df)
         resp = strategy_safe_wrapper(
             self.loop_entry, default_retval=(None, ""), supress_error=True
         )(
@@ -209,6 +188,7 @@ class IStrategy(freqtrade.strategy.IStrategy):
         for pair, (dataframe,new_candle) in result_dataframe.items():
             self.dp._set_cached_df(pair, self.timeframe, dataframe, candle_type=candle_type)
             self.dp._emit_df((pair, self.timeframe, candle_type), dataframe, new_candle)
+        return result_dataframe
 
 
     def _analyze_ticker_signals(self, dataframe: DataFrame, metadata: dict) :
@@ -253,7 +233,7 @@ class IStrategy(freqtrade.strategy.IStrategy):
         """
       
         if not isinstance(dataframe, DataFrame) or dataframe.empty:
-            logger.warning("Empty candle (OHLCV) data for pair %s", pair)
+            # logger.warning("Empty candle (OHLCV) data for pair %s", pair)
             return ()
 
         try:
@@ -267,7 +247,8 @@ class IStrategy(freqtrade.strategy.IStrategy):
             return ()
 
         if dataframe.empty:
-            logger.warning("Empty dataframe for pair %s", pair)
+            
+            # logger.warning("Empty dataframe for pair %s", pair)
             return ()
         return dataframe,new_candle
         

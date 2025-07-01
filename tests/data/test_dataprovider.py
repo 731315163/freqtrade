@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 from pandas import DataFrame, Timestamp
 
-from freqtrade.data.dataprovider import DataProvider
+from freqtrade0.data.dataprovider import DataProvider
 from freqtrade.enums import CandleType, RunMode
 from freqtrade.exceptions import ExchangeError, OperationalException
 from freqtrade.plugins.pairlistmanager import PairListManager

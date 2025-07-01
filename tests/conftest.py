@@ -58,7 +58,7 @@ EXMS = "freqtrade0.exchange.exchange.Exchange"
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--longrun0",
+        "--longrun",
         action="store_true",
         dest="longrun",
         default=False,

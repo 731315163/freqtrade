@@ -2001,6 +2001,8 @@ def test_adjust_entry_cancel(
     # check that order is cancelled
     freqtrade.strategy.adjust_entry_price = MagicMock(return_value=None)
     freqtrade.manage_open_orders()
+    Trade.commit()
+
     trades = Trade.session.scalars(select(Trade).where(Order.ft_trade_id == Trade.id)).all()
 
     assert len(trades) == 0

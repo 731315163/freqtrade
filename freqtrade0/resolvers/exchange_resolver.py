@@ -2,33 +2,41 @@
 This module loads custom exchanges
 """
 
-import logging
 from inspect import isclass
 from typing import Any
-from types import MethodType
-from freqtrade.enums.candletype import CandleType
 
+import freqtrade.exchange as exchanges
+from freqtrade0.exchange import MAP_EXCHANGE_CHILDCLASS, Exchange
 from freqtrade.constants import Config, ExchangeConfig
-
+from freqtrade.enums.candletype import CandleType
+from freqtrade.resolvers import exchange_resolver
 from freqtrade.resolvers.iresolver import IResolver
 
 
-from freqtrade.exchange import MAP_EXCHANGE_CHILDCLASS, Exchange
-import freqtrade.exchange as exchanges
-logger = logging.getLogger(__name__)
+logger = exchange_resolver.logger
 
-def _now_is_time_to_refresh_trades(
-            self, pair: str, timeframe: str, candle_type: CandleType
-        ) -> bool:  # Timeframe in seconds
-            logger.info("----------------------------------------class reject _now_is_time_to_refresh_trades True")
-            return True
-            # trades = self.trades((pair, timeframe, candle_type), False)
-            # pair_last_refreshed = int(trades.iloc[-1]["timestamp"])
-            # full_candle = (
-            #     int(timeframe_to_next_date(timeframe, dt_from_ts(pair_last_refreshed)).timestamp())
-            #     * 1000
-            # )
-Exchange._now_is_time_to_refresh_trades = _now_is_time_to_refresh_trades
+# def _now_is_time_to_refresh_trades(
+#             self, pair: str, timeframe: str, candle_type: CandleType
+#         ) -> bool:  # Timeframe in seconds
+#             logger.info("----------------------------------------class reject _now_is_time_to_refresh_trades True")
+#             return True
+#             # trades = self.trades((pair, timeframe, candle_type), False)
+#             # pair_last_refreshed = int(trades.iloc[-1]["timestamp"])
+#             # full_candle = (
+#             #     int(timeframe_to_next_date(timeframe, dt_from_ts(pair_last_refreshed)).timestamp())
+#             #     * 1000
+#             # )
+# def _now_is_time_to_refresh(self, pair: str, timeframe: str, candle_type: CandleType) -> bool:
+#         # Timeframe in seconds
+#         logger.info("----------------------------------------class reject now is time refresh True")
+#         return True
+#         # interval_in_sec = timeframe_to_msecs(timeframe)
+#         # plr = self._pairs_last_refresh_time.get((pair, timeframe, candle_type), 0) + interval_in_sec
+#         # # current,active candle open date
+#         # now = dt_ts(timeframe_to_prev_date(timeframe))
+#         # return plr < now
+# Exchange._now_is_time_to_refresh_trades = _now_is_time_to_refresh_trades
+# Exchange._now_is_time_to_refresh= _now_is_time_to_refresh
 class ExchangeResolver(IResolver):
     """
     This class contains all the logic to load a custom exchange class
@@ -84,20 +92,14 @@ class ExchangeResolver(IResolver):
         :param exchange_name: name of the module to import
         :return: Exchange instance or None
         """
-        
-        def _now_is_time_to_refresh_trades(
-            self, pair: str, timeframe: str, candle_type: CandleType
-        ) -> bool:  # Timeframe in seconds
-            logger.info("instance reject _now_is_time_to_refresh_trades True")
-            return True
+     
         try:
             ex_class = getattr(exchanges, exchange_name)
 
             exchange = ex_class(**kwargs)
             if exchange:
                 logger.info(f"Using resolved exchange '{exchange_name}'...")
-                # exchange._now_is_time_to_refresh_trades = MethodType(_now_is_time_to_refresh_trades, exchange)
-                exchange._now_is_time_to_refresh_trades("", "", CandleType.FUTURES)
+               
                 return exchange
         except AttributeError:
             # Pass and raise ImportError instead

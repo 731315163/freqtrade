@@ -155,12 +155,12 @@ class Runer:
         timerange: tuple[datetime, datetime] | None = None,
         candletype=CandleType.FUTURES,
     ):
-        if timerange is None:
-            tr = timeframe
-        else:
+        tr = None        
+        if timerange:
             b, e = timerange
             tr = TimeRange(startts=int(b.timestamp()),
                            stopts=int(e.timestamp()))
+            
         return history_utils.load_pair_history(
             datadir=self.user_data_path / "data" / exchange,
             pair=pair,

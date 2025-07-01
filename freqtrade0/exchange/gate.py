@@ -8,7 +8,7 @@ import ccxt
 from freqtrade.constants import BuySell
 from freqtrade.enums import MarginMode, PriceType, TradingMode
 from freqtrade.exceptions import DDosProtection, OperationalException, TemporaryError
-from freqtrade0.exchange import Exchange
+
 from freqtrade.exchange.common import retrier
 from freqtrade.exchange.exchange_types import CcxtOrder, FtHas
 from freqtrade.misc import safe_value_fallback2
@@ -16,7 +16,7 @@ from freqtrade.misc import safe_value_fallback2
 
 logger = logging.getLogger(__name__)
 
-
+from freqtrade0.exchange import Exchange
 class Gate(Exchange):
     """
     Gate.io exchange class. Contains adjustments needed for Freqtrade to work

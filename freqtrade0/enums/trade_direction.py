@@ -21,8 +21,8 @@ class TradeDirection(IntFlag):
                 return TradeDirection.BOTH
             case _:
                 return TradeDirection.NONE
-    def __str__(self):
+    def __str__(self) -> str :
         # convert to string
-        return self.name
+        return self.name # type: ignore
 
 

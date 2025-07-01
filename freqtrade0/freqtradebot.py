@@ -2,6 +2,7 @@
 Freqtrade is the main module of this bot. It contains the class Freqtrade()
 """
 
+import asyncio
 from copy import deepcopy
 from datetime import datetime, time, timedelta, timezone
 from threading import Lock
@@ -40,6 +41,7 @@ from freqtrade.plugins.pairlistmanager import PairListManager
 from freqtrade.plugins.protectionmanager import ProtectionManager
 from freqtrade.rpc import RPCManager
 from freqtrade.rpc.external_message_consumer import ExternalMessageConsumer
+from freqtrade.strategy.informative_decorator import informative
 from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 from freqtrade.util import FtPrecise, MeasureTime, PeriodicCache, dt_now
 from freqtrade.wallets import Wallets
@@ -170,7 +172,9 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         self.strategy.ft_bot_start()
         # Initialize protections AFTER bot start - otherwise parameters are not loaded.
         self.protections = ProtectionManager(self.config, self.strategy.protections)
-
+        self.use_public_trades = self.config.get("exchange", {}).get("use_public_trades", False)
+        if not self.use_public_trades:
+            logger.info("Using public trades is disabled. ")
         def log_took_too_long(duration: float, time_limit: float):
             logger.warning(
                 f"Strategy analysis took {duration:.2f}s, more than 25% of the timeframe "
@@ -180,6 +184,11 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             )
 
         self._measure_execution = MeasureTime(log_took_too_long, timeframe_secs * 0.25)
+
+        self.ohlcv_lock = asyncio.Lock()
+        self.trades_lock = asyncio.Lock()
+        self.pre_ohlcv_whitelist = set()
+        self.pre_trades_whitelist = set()
     def log_once(self, message: str, logmethod: Callable, force_show: bool = False) -> None:
         """
         Logs message - not more often than "refresh_period" to avoid log spamming
@@ -201,8 +210,42 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             logmethod(message)
             self.log_cache[message] = now_time
      
-       
-        
+    def _getpairlist(self,informative_pairlist):
+        trades: list[Trade] = Trade.get_open_trades()
+        self.active_pair_whitelist = self._refresh_active_whitelist(trades)
+        pairlist = self.pairlists.create_pair_list(self.active_pair_whitelist)
+        res_pair_list = pairlist + informative_pairlist if informative_pairlist else pairlist
+        return res_pair_list
+    
+    def _get_ohlcv_set(self):
+        informative_pairlist =self.strategy.gather_informative_pairs()
+        _pairs = self._getpairlist(informative_pairlist)
+        return set(_pairs)
+
+    async def refresh_ohlcv(self):
+        ohlcv_pairs = self._get_ohlcv_set()
+        self.pre_ohlcv_whitelist = ohlcv_pairs
+        while ohlcv_pairs == self.pre_ohlcv_whitelist:
+            ohlcv_pairs = self._get_tradesset()
+            await self.dataprovider.build_trades_job(pairs_wt=ohlcv_pairs)
+            logger.info("refresh_ohlcv")
+            self.pre_ohlcv_whitelist = ohlcv_pairs
+            
+
+    def _get_tradesset(self):
+        informative_pairlist =self.strategy.gather_informative_trade_pairs()
+        trade_pairs = self._getpairlist(informative_pairlist)
+        return set(trade_pairs)
+    async def refresh_trades(self):
+        trade_pairs = self._get_tradesset()
+        self.pre_trades_whitelist = trade_pairs
+        while trade_pairs == self.pre_trades_whitelist:
+            trade_pairs = self._get_tradesset()
+            await self.dataprovider.build_trades_job(pairs_wt=trade_pairs)
+            logger.info("refresh_trades")
+            self.pre_trades_whitelist = trade_pairs
+            
+
         
     def process(self) -> None:
         """
@@ -217,14 +260,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         self.update_trades_without_assigned_fees()
 
         # Query trades from persistence layer
-        trades: list[Trade] = Trade.get_open_trades()
-
-        self.active_pair_whitelist = self._refresh_active_whitelist(trades)
-        pairlist = self.pairlists.create_pair_list(self.active_pair_whitelist)
-        ohlcv_pair_list =self.dataprovider.merge_pairs_helperpairs(pairlist,self.strategy.gather_informative_pairs())
-        self.dataprovider.refresh_latest_ohlcv(ohlcv_pair_list)
-        trade_pair_list = self.dataprovider.merge_pairs_helperpairs(pairlist,self.strategy.gather_informative_trade_pairs())
-        self.dataprovider.refresh_latest_trades(trade_pair_list)
+       
         strategy_safe_wrapper(self.strategy.bot_loop_start, supress_error=True)(
             current_time=datetime.now(timezone.utc)
         )
@@ -404,9 +440,9 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                     
                     with self._exit_lock:
                             loopmode = self.strategy.loop_mode
-                            if loopmode | LoopMode.Tick> LoopMode.NONE:                           
+                            if loopmode == LoopMode.Tick or loopmode == LoopMode.All:                           
                                 trades_created += self._create_trade_bytickle(pair,direction= direction,df= analyzed_df)
-                            if loopmode | LoopMode.NewCandle> LoopMode.NONE:
+                            if loopmode == LoopMode.NewCandle or loopmode == LoopMode.All:
                                 trades_created_ohlc += self.create_trade(pair,direction= direction,df=analyzed_df)
                 except DependencyException as exception:
                     logger.warning("Unable to create trade for %s: %s", pair, exception)
@@ -416,7 +452,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 p_str = ",".join(p)
                 msg+=f"{t}:{p_str}\n"
             if (trades_created+trades_created_ohlc)==0:
-                self.log_once( f"Found no enter signals for whitelisted currencies. Trying again...{msg}",logger.debug)
+                logger.info( f"Found no enter signals for whitelisted currencies.")
             else:
                 self.log_once(f"refresh data {msg}...", logger.info)
         return trades_created+trades_created_ohlc

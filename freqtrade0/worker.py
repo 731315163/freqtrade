@@ -3,28 +3,29 @@ Main Freqtrade worker class.
 """
 
 import asyncio
-import logging
+from datetime import datetime, timedelta
 import time
 import traceback
 from collections.abc import Callable
 from os import getpid
-from typing import Any, Coroutine
+from typing import Any, Coroutine, overload
 
+from numpy import isin
 import sdnotify
+from janus import T
 
-from freqtrade import __version__
+from freqtrade import __version__, worker
+from freqtrade0.freqtradebot import FreqtradeBot
 from freqtrade.configuration import Configuration
 from freqtrade.constants import PROCESS_THROTTLE_SECS, RETRY_TIMEOUT, Config
 from freqtrade.enums import RPCMessageType, State
 from freqtrade.exceptions import OperationalException, TemporaryError
 
-from .freqtradebot import FreqtradeBot
-from freqtrade.worker import Worker as WorkerBase
 
-logger = logging.getLogger(__name__)
+logger = worker.logger
 
 
-class Worker(WorkerBase):
+class Worker(worker.Worker):
     """
     Freqtradebot worker class
     """
@@ -43,7 +44,7 @@ class Worker(WorkerBase):
 
         # Tell systemd that we completed initialization phase
         self._notify("READY=1")
-        self.loop_tasks= []
+        self.tasks= []
 
     def _init(self, reconfig: bool,strategy:type|None=None) -> None:
         """
@@ -68,28 +69,60 @@ class Worker(WorkerBase):
 
  
 
-    # def run(self) -> None:
- 
-    #     if len(self._looptasks) <= 0:
-    #         self.register()
-    #     async def _run():
-    #         await asyncio.gather(*[asyncio.create_task( c()) for c in self._looptasks])
-    #     asyncio.run(_run())
-  
-    def register_looptask(self,task:Callable[[State,State|None],Coroutine]):
-        async def loop():
-           oldstate = None
-           while True:
-               state = self.freqtrade.state
-               await task(state,oldstate)
-               oldstate = state
-        self.loop_tasks.append(loop)
     
+    
+    def run(self) -> None:
+        try:
+          asyncio.run(self.gather(),debug=True)
+        except asyncio.CancelledError as e:
+            logger.error(e)
+            pass
+      
+        
 
+        
+    async def gather(self):
+        async def _work():
+            state = None
+            while True:
+                try:
+                    start = time.time()
+                    state = self.worker(old_state=state)
+                    if state == State.RELOAD_CONFIG:
+                        self._reconfigure()
+                    await self.sleep(start)
+                except Exception as e:
+                    # Log error and continue
+                    await asyncio.sleep(1)  # Prevent tight-loop on critical failure
+
+        async def refresh_trades():
+            while True:
+                try:
+                    start = time.time()
+                    await self.freqtrade.refresh_trades()
+                    await self.sleep(start)
+                except Exception as e:
+                    # Log error and continue
+                    await asyncio.sleep(1)
+
+        async def refresh_ohlcv():
+            while True:
+                try:
+                    start = time.time()
+                    await self.freqtrade.refresh_ohlcv()
+                    await self.sleep(start)
+                except Exception as e:
+                    # Log error and continue
+                    await asyncio.sleep(1)
+
+        tasks = [refresh_ohlcv(), self.process()]
+        if self.freqtrade.use_public_trades:
+            tasks.append(refresh_trades())
+        await asyncio.gather(*tasks)
+      
+   
     
     async def async_reload_state(self,state:State, old_state:State|None=None):
-         # Log state transition
-        print("call _reload_state")
         if state != old_state:
             if old_state != State.RELOAD_CONFIG:
                 self.freqtrade.notify_status(f"{state.name.lower()}")
@@ -110,87 +143,55 @@ class Worker(WorkerBase):
             # first throttling iteration when the state changes
             self._heartbeat_msg = 0
         else:
-            await asyncio.sleep(self._throttle_secs)
-    async def async_stopstate(self,state, old_state=None):
-        print("call _stopstate")
+            await self.async_process_loop_state(state)
+    async def async_process_loop_state(self,state):
+        if state in (State.RUNNING, State.PAUSED):
+            state_str = "RUNNING" if state == State.RUNNING else "PAUSED"
+            # Ping systemd watchdog before throttling
+            self._notify(f"WATCHDOG=1\nSTATUS=State: {state_str}.")
+            # Use an offset of 1s to ensure a new candle has been issued
+            self.freqtrade.process()
+        else:
+            await self.async_stopstate(state)
+    async def async_stopstate(self,state):
         if state == State.STOPPED:
             # Ping systemd watchdog before sleeping in the stopped state
             self._notify("WATCHDOG=1\nSTATUS=State: STOPPED.")
-            await self._throttle(func=self._process_stopped, throttle_secs=self._throttle_secs)
-        else:
-           await asyncio.sleep(self._throttle_secs)
-    
-    async def async_process_state(self,state, old_state=None):
-        print("call _process_state")
-        if state in (State.RUNNING, State.PAUSED):
-            state_str = "RUNNING" if state == State.RUNNING else "PAUSED"
-            # Ping systemd watchdog before throttling
-            self._notify(f"WATCHDOG=1\nSTATUS=State: {state_str}.")
-            async def _process_running() -> None:
-                await self.async_process_running_callback(self.freqtrade.process)
-            # Use an offset of 1s to ensure a new candle has been issued
-            await self._throttle(
-                func=_process_running,
-                throttle_secs=self._throttle_secs
-            )
-        else:
+            self._process_stopped()
             await asyncio.sleep(self._throttle_secs)
     
-    async def async_process_loop_state(self,state, old_state=None):
-        print("call _process_loop_state")
-        if state in (State.RUNNING, State.PAUSED):
-            state_str = "RUNNING" if state == State.RUNNING else "PAUSED"
-            # Ping systemd watchdog before throttling
-            self._notify(f"WATCHDOG=1\nSTATUS=State: {state_str}.")
-            async def call():
-                await self.async_process_running_callback(callback=self.freqtrade.process)
-            # Use an offset of 1s to ensure a new candle has been issued
-            await self._throttle(func=call,throttle_secs=self._throttle_secs)
-        else:
-            await asyncio.sleep(self._throttle_secs)
-    async def async_heartbeat(self,state, old_state=None):
-        print("call _heartbeat")
-        if self._heartbeat_interval:
-            now = time.time()
-            duration = now -self._heartbeat_msg
-            if duration > self._heartbeat_interval:
-                version = __version__
-                strategy_version = self.freqtrade.strategy.version()
-                if strategy_version is not None:
-                    version += ", strategy_version: " + strategy_version
-                logger.info(
-                    f"Bot heartbeat. PID={getpid()}, version='{version}', state='{state.name}'"
-                )
-                self._heartbeat_msg = now
-            else:
-                await asyncio.sleep(self._heartbeat_interval - duration)
-        else:
-            await asyncio.sleep(self._throttle_secs)
-    async def async_process_running_callback(self,callback) -> None:
-        try:
-            await callback()
-        except TemporaryError as error:
-            logger.warning(f"Error: {error}, retrying in {RETRY_TIMEOUT} seconds...")
-            time.sleep(RETRY_TIMEOUT)
-        except OperationalException:
-            tb = traceback.format_exc()
-            hint = "Issue `/start` if you think it is safe to restart."
+    
+   
+   
+    # async def async_process_running_callback(self,callback) -> None:
+    #     try:
+    #         await callback()
+    #     except TemporaryError as error:
+    #         logger.warning(f"Error: {error}, retrying in {RETRY_TIMEOUT} seconds...")
+    #         await asyncio.sleep(RETRY_TIMEOUT)
+    #     except OperationalException:
+    #         tb = traceback.format_exc()
+    #         hint = "Issue `/start` if you think it is safe to restart."
 
-            self.freqtrade.notify_status(
-                f"*OperationalException:*\n```\n{tb}```\n {hint}", msg_type=RPCMessageType.EXCEPTION
-            )
+    #         self.freqtrade.notify_status(
+    #             f"*OperationalException:*\n```\n{tb}```\n {hint}", msg_type=RPCMessageType.EXCEPTION
+    #         )
 
-            logger.exception("OperationalException. Stopping trader ...")
-            self.freqtrade.state = State.STOPPED
-    def register(self):
-        self.register_looptask(self.async_reload_state)
-        self.register_looptask(self.async_stopstate) 
-        self.register_looptask(self.async_heartbeat)
-        self.register_looptask(self.async_process_state)
+    #         logger.exception("OperationalException. Stopping trader ...")
+    #         self.freqtrade.state = State.STOPPED
+    async def process(self):
+        oldstate = None
+        while True:
+            start_time = time.time()
+            state = self.freqtrade.state
+            await self.async_reload_state(state,oldstate)
+            oldstate = state
+            await self.sleep(start_time)
+      
         # self.register_looptask(self._process_loop_state)
         
 
-    def _worker(self, old_state: State | None) -> State:
+    def worker(self, old_state: State | None) -> State:
         """
         The main routine that runs each throttling iteration and handles the states.
         :param old_state: the previous service state from the previous call
@@ -222,8 +223,7 @@ class Worker(WorkerBase):
         if state == State.STOPPED:
             # Ping systemd watchdog before sleeping in the stopped state
             self._notify("WATCHDOG=1\nSTATUS=State: STOPPED.")
-
-            self._throttle(func=self._process_stopped, throttle_secs=self._throttle_secs)
+            self._process_stopped()
 
         elif state in (State.RUNNING, State.PAUSED):
             state_str = "RUNNING" if state == State.RUNNING else "PAUSED"
@@ -231,10 +231,8 @@ class Worker(WorkerBase):
             self._notify(f"WATCHDOG=1\nSTATUS=State: {state_str}.")
 
             # Use an offset of 1s to ensure a new candle has been issued
-            self._throttle(
-                func=self._process_running,
-                throttle_secs=self._throttle_secs
-            )
+            self._process_running()
+            
 
         if self._heartbeat_interval:
             now = time.time()
@@ -251,13 +249,38 @@ class Worker(WorkerBase):
         return state
     def _gettime(self) -> float:
         return time.time()
-    def _throttle(
+   
+    @overload
+    async def sleep(
+    self,
+    start_time: datetime,  # 现在接收 datetime 对象
+    *args,
+    **kwargs):...
+    @overload
+    async def sleep(
         self,
-        func: Callable[..., Any],
-        throttle_secs: float,
+        start_time:float,
         *args,
-        **kwargs,
-    ) -> Any:
+        **kwargs) :...
+   
+    async def sleep(
+        self,
+        start_time,
+        *args,
+        **kwargs
+    ) :
+        if isinstance(start_time,datetime):
+            await self.sleep_datetime(start_time)
+        elif isinstance(start_time,float):
+            await self.sleep_s(start_time)
+        else:
+            raise TypeError(f"{start_time} is not a valid type")
+    async def sleep_s(
+        self,
+        start_time:float,
+        *args,
+        **kwargs
+    ) :
         """
         Throttles the given callable that it
         takes at least `min_secs` to finish execution.
@@ -267,18 +290,37 @@ class Worker(WorkerBase):
         :param timeframe_offset: offset in seconds to apply to the next candle time.
         :return: Any (result of execution of func)
         """
-        now = self._gettime
-        last_throttle_start_time = now()
-        logger.debug("========================================")
-        result =  func(*args, **kwargs)
-        time_passed = now() - last_throttle_start_time
-        sleep_duration = throttle_secs - time_passed
+        sleep_duration =start_time + self._throttle_secs - time.time() 
         sleep_duration = max(sleep_duration, 0.0)
         if sleep_duration > 0:
-            time.sleep(sleep_duration)
-        return result
-
-
+            await asyncio.sleep(sleep_duration)
+    async def sleep_datetime(
+    self,
+    start_time: datetime,  # 现在接收 datetime 对象
+    *args,
+    **kwargs
+):
+        """
+        Throttles the given callable so that it takes at least `min_secs` to finish execution.
+        :param start_time: Start time as a datetime object
+        :param throttle_secs: Throttling iteration execution time limit in seconds
+        :return: Any (result of execution of func)
+        """
+        current_time = datetime.now()
+        
+        # 确保 start_time 不早于当前时间（避免负的睡眠时间）
+        adjusted_start_time = max(start_time, current_time)
+        
+        # 计算目标结束时间（开始时间 + throttle_secs）
+        target_time = adjusted_start_time + timedelta(seconds=self._throttle_secs)
+        
+        # 计算需要睡眠的时间差
+        sleep_duration = (target_time - current_time).total_seconds()
+        sleep_duration = max(sleep_duration, 0.0)
+        
+        # 异步等待
+        if sleep_duration > 0:
+            await asyncio.sleep(sleep_duration)
 
   
    

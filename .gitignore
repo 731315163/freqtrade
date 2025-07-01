@@ -117,3 +117,5 @@ target/
 
 docker-compose-*.yml
 uv.lock
+pyproject.toml
+pyproject.toml

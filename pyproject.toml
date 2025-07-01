@@ -13,7 +13,8 @@ authors = [
 
 description = "Freqtrade - Crypto Trading Bot"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
+
 license = {text = "GPLv3"}
 classifiers = [
     "Environment :: Console",
@@ -160,7 +161,7 @@ namespaces = true
 version = {attr = "freqtrade.__version__"}
 
 [tool.black]
-line-length = 100
+line-length = 128
 exclude = '''
 (
   /(
@@ -181,7 +182,7 @@ exclude = '''
 '''
 
 [tool.isort]
-line_length = 100
+line_length = 128
 profile = "black"
 # multi_line_output=3
 lines_after_imports=2
@@ -196,24 +197,24 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 addopts = "--dist loadscope"
 
-[tool.mypy]
-ignore_missing_imports = true
-namespace_packages = false
-warn_unused_ignores = true
-exclude = [
-    '^build_helpers\.py$',
-    '^ft_client/build/.*$',
-]
-plugins = [
-  "sqlalchemy.ext.mypy.plugin"
-]
+# [tool.mypy]
+# ignore_missing_imports = true
+# namespace_packages = false
+# warn_unused_ignores = true
+# exclude = [
+#     '^build_helpers\.py$',
+#     '^ft_client/build/.*$',
+# ]
+# plugins = [
+#   "sqlalchemy.ext.mypy.plugin"
+# ]
 
-[[tool.mypy.overrides]]
-module = "tests.*"
-ignore_errors = true
+# [[tool.mypy.overrides]]
+# module = "tests.*"
+# ignore_errors = true
 
 [tool.pyright]
-include = ["freqtrade", "ft_client"]
+include = ["freqtrade","freqtrade0", "ft_client"]
 exclude = [
   "**/__pycache__",
   "build_helpers/*.py",
@@ -222,27 +223,26 @@ exclude = [
 ]
 ignore = ["freqtrade/vendor/**"]
 pythonPlatform = "All"
-pythonVersion = "3.9"
 
-typeCheckingMode = "off"
+# typeCheckingMode = "off"
 # analyzeUnannotatedFunctions = false
 
-reportArgumentType = false  # 155
-reportAssignmentType = false  # 12
-reportAttributeAccessIssue = false  # 255
-reportCallIssue = false  # 23
-reportGeneralTypeIssues = false  # 48
-reportIncompatibleMethodOverride = false  # 15
-reportIncompatibleVariableOverride = false  # 5
-reportIndexIssue = false  # 22
-reportMissingImports = false  # 5
-reportOperatorIssue = false  # 7
+# reportArgumentType = false  # 155
+# reportAssignmentType = false  # 12
+reportAttributeAccessIssue = "warning"  # 255
+# reportCallIssue = false  # 23
+# reportGeneralTypeIssues = false  # 48
+# reportIncompatibleMethodOverride = false  # 15
+# reportIncompatibleVariableOverride = false  # 5
+# reportIndexIssue = false  # 22
+# reportMissingImports = false  # 5
+# reportOperatorIssue = false  # 7
 reportOptionalMemberAccess = false  # 35
-reportOptionalOperand = false  # 7
-reportPossiblyUnboundVariable = false  # 36
-reportPrivateImportUsage = false  # 5
-reportRedeclaration = false  # 1
-reportReturnType = false  # 28
+# reportOptionalOperand = false  # 7
+# reportPossiblyUnboundVariable = false  # 36
+# reportPrivateImportUsage = false  # 5
+# reportRedeclaration = false  # 1
+# reportReturnType = false  # 28
 reportTypedDictNotRequiredAccess = false  # 27
 
 
