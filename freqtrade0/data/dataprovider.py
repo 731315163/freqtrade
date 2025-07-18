@@ -6,125 +6,66 @@ Common Interface for bot and strategy to access data.
 """
 
 import asyncio
-import inspect
+import asyncio.taskgroups
 import logging
-import signal
 from collections import deque
-from collections.abc import Coroutine, Generator, Iterable
-from copy import deepcopy
-from datetime import datetime, timedelta, timezone
-from math import floor, isnan
-from pdb import run
-from threading import Lock
-from typing import Any, Literal, TypeGuard, TypeVar
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from typing import Any, TypeVar
 
-import ccxt
-import ccxt.pro as ccxt_pro
-from cachetools import TTLCache
-from ccxt import TICK_SIZE
-from dateutil import parser
-from pandas import DataFrame, Timedelta, Timestamp, concat, to_timedelta
+from pandas import DataFrame
+from tradepulse.exchange import ExchangeABC, ExchangeFactory
 
-from freqtrade0.data.async_queue import Queue
-from freqtrade0.exchange import Exchange
 from freqtrade.configuration import TimeRange
 from freqtrade.constants import (
-    DEFAULT_AMOUNT_RESERVE_PERCENT,
-    DEFAULT_TRADES_COLUMNS,
-    FULL_DATAFRAME_THRESHOLD,
-    NON_OPEN_EXCHANGE_STATES,
-    BidAsk,
-    BuySell,
     Config,
-    EntryExit,
-    ExchangeConfig,
     ListPairsWithTimeframes,
-    MakerTaker,
-    OBLiteral,
     PairWithTimeframe,
 )
 from freqtrade.data import dataprovider
-from freqtrade.data.converter import (
-    clean_ohlcv_dataframe,
-    ohlcv_to_dataframe,
-    trades_df_remove_duplicates,
-    trades_dict_to_list,
-    trades_list_to_df,
-)
 from freqtrade.data.dataprovider import MAX_DATAFRAME_CANDLES, NO_EXCHANGE_EXCEPTION, logger
 from freqtrade.data.history import get_datahandler, load_pair_history
 from freqtrade.enums import (
-    OPTIMIZE_MODES,
-    TRADE_MODES,
     CandleType,
-    MarginMode,
-    PriceType,
-    RPCMessageType,
     RunMode,
     TradingMode,
 )
 from freqtrade.exceptions import (
-    ConfigurationError,
-    DDosProtection,
     ExchangeError,
-    InsufficientFundsError,
-    InvalidOrderException,
     OperationalException,
-    PricingError,
-    RetryableOrderError,
-    TemporaryError,
 )
 from freqtrade.exchange import timeframe_to_prev_date, timeframe_to_seconds
-from freqtrade.exchange.common import (
-    API_FETCH_ORDER_RETRY_COUNT,
-    remove_exchange_credentials,
-    retrier,
-    retrier_async,
-)
 from freqtrade.exchange.exchange_types import (
-    CcxtBalances,
-    CcxtOrder,
-    CcxtPosition,
-    FtHas,
-    OHLCVResponse,
     OrderBook,
-    Ticker,
-    Tickers,
-)
-from freqtrade.exchange.exchange_utils import (
-    ROUND,
-    ROUND_DOWN,
-    ROUND_UP,
-    amount_to_contract_precision,
-    amount_to_contracts,
-    amount_to_precision,
-    contracts_to_amount,
-    date_minus_candles,
-    is_exchange_known_ccxt,
-    market_is_active,
-    price_to_precision,
 )
 from freqtrade.exchange.exchange_utils_timeframe import (
-    timeframe_to_minutes,
     timeframe_to_msecs,
-    timeframe_to_next_date,
     timeframe_to_prev_date,
     timeframe_to_seconds,
 )
-from freqtrade.exchange.exchange_ws import ExchangeWS
-from freqtrade.misc import (
-    append_candles_to_dataframe,
-    chunks,
-    deep_merge_dicts,
-    file_dump_json,
-    file_load_json,
-    safe_value_fallback2,
-)
 from freqtrade.rpc import RPCManager
-from freqtrade.rpc.rpc_types import RPCAnalyzedDFMsg
-from freqtrade.util import PeriodicCache, dt_from_ts, dt_now
-from freqtrade.util.datetime_helpers import dt_humanize_delta, dt_ts, format_ms_time
-from freqtrade.util.periodic_cache import PeriodicCache
+from freqtrade.util import PeriodicCache
+from freqtrade.util.datetime_helpers import dt_ts
+from freqtrade0.exchange import Exchange
+
+
+"""
+Dataprovider
+Responsible to provide data to the bot
+including ticker and orderbook data, live and historical candle (OHLCV) data
+Common Interface for bot and strategy to access data.
+"""
+
+
+
+from freqtrade.exchange import Exchange, timeframe_to_prev_date, timeframe_to_seconds
+from freqtrade.util import PeriodicCache
+
+
+logger = logging.getLogger(__name__)
+
+NO_EXCHANGE_EXCEPTION = "Exchange is not available to DataProvider."
+MAX_DATAFRAME_CANDLES = 1000
 
 
 logger = logging.getLogger(__name__)
@@ -162,9 +103,9 @@ class DataProvider(dataprovider.DataProvider):
 
         self.producers = self._config.get("external_message_consumer", {}).get("producers", [])
         self.external_data_enabled = len(self.producers) > 0
-        
-       
-       
+
+        # custom define
+        self._exchangeABC: ExchangeABC = ExchangeFactory.get_exchange("",config=config)
     def _now_is_time_to_refresh_trades(
             self, pair: str, timeframe: str, candle_type: CandleType
         ) -> bool:  # Timeframe in seconds
@@ -179,7 +120,7 @@ class DataProvider(dataprovider.DataProvider):
         return plr < now
     async def build_ohlcv_job(
         self,
-        pair_wt: PairWithTimeframe,
+        pairs_wt: Iterable[PairWithTimeframe],
         *,
         since_ms: int | None = None,
         cache: bool = True,
@@ -198,42 +139,11 @@ class DataProvider(dataprovider.DataProvider):
 
         Build Coroutines to execute as part of refresh_latest_ohlcv
         """
-     
-        pair, timeframe, candle_type =pair_wt
-        if timeframe not in self._exchange.timeframes and candle_type in ( 
-            CandleType.SPOT,
-            CandleType.FUTURES,
-        ):
-            logger.warning(
-                f"Cannot download ({pair}, {timeframe}) combination as this timeframe is "
-                f"not available on {self._exchange.name}. Available timeframes are "
-                f"{', '.join(self._exchange.timeframes)}."
-            )
-            return
+        async with asyncio.taskgroups.TaskGroup() as tg:
+            for pair_wt in pairs_wt:
+                pair, timeframe, candle_type = pair_wt
+                tg.create_task( self._exchangeABC.ohlcv(symbol = pair,timeframe=timeframe, since=0 ,marketType= candle_type))
 
-        if (
-            (pair, timeframe, candle_type) not in self._exchange._klines
-            or not cache
-            or self._now_is_time_to_refresh(pair, timeframe, candle_type)
-        ):
-            
-            res = await self._exchange._build_coroutine(pair, timeframe, candle_type, since_ms, cache)
-            if isinstance(res, Exception):
-                logger.warning(f"Async code raised an exception: {repr(res)}")
-                return
-            # Deconstruct tuple (has 5 elements)
-            pair, timeframe, c_type, ticks, drop_hint = res
-            drop_incomplete_ = drop_hint if drop_incomplete is None else drop_incomplete
-            ohlcv_df = self._exchange._process_ohlcv_df(
-                pair, timeframe, c_type, ticks, cache, drop_incomplete_
-            )
-            return ohlcv_df
-  
-   
-        
-            
-         
-       
     async def build_trades_job(
         self,
         pairs_wt: Iterable[PairWithTimeframe],
@@ -248,70 +158,326 @@ class DataProvider(dataprovider.DataProvider):
         :return: Dict of [{(pair, timeframe): Dataframe}]
         """
         if self._exchange is None:
-            raise OperationalException(NO_EXCHANGE_EXCEPTION) 
+            raise OperationalException(NO_EXCHANGE_EXCEPTION)
         from freqtrade.data.history import get_datahandler
         data_handler = get_datahandler(
         self._config["datadir"], data_format=self._config["dataformat_trades"]
         )
-        await self._exchange.build_trades_dl_jobs(pairs_wt=pairs_wt, data_handler=data_handler, cache=cache)
-    # async def gather_coroutines_latest_trades(self, pairlist: ListPairsWithTimeframes) :
-    #     """
-    #     Refresh latest trades data (if enabled in config)
-    #     """
-    #     if self._exchange is None:
-    #         raise OperationalException(NO_EXCHANGE_EXCEPTION) 
-   
-    #     for pair_wt in self.refresh_trades_running_tasks:
-    #         pairlist.remove(pair_wt)
-    #     for pair_wt in pairlist :
-    #         if pair_wt not in self.refresh_trades_queue:
-    #             await self.refresh_trades_queue.put(self.build_coroutine_latest_trade(pair_wt,data_handler=data_handler,running_queue=self.refresh_trades_running_tasks))
-       
-        
+        async with asyncio.taskgroups.TaskGroup() as tg:
+            for pair_wt in pairs_wt:
+                pair, timeframe, candle_type = pair_wt
+                tg.create_task( self._exchangeABC.trades(symbol = pair,since = 0,marketType = candle_type))
 
 
 
 
-    # def refresh_latest_trades(
-    #     self,
-    #     pair_list: ListPairsWithTimeframes,
-    #     *,
-    #     cache: bool = True,
-    # ) -> dict[PairWithTimeframe, DataFrame]:
-    #     """
-    #     Refresh in-memory TRADES asynchronously and set `_trades` with the result
-    #     Loops asynchronously over pair_list and downloads all pairs async (semi-parallel).
-    #     Only used in the dataprovider.refresh() method.
-    #     :param pair_list: List of 3 element tuples containing (pair, timeframe, candle_type)
-    #     :param cache: Assign result to _trades. Useful for one-off downloads like for pairlists
-    #     :return: Dict of [{(pair, timeframe): Dataframe}]
-    #     """
-    #     from freqtrade.data.history import get_datahandler
 
-    #     data_handler = get_datahandler(
-    #         self._config["datadir"], data_format=self._config["dataformat_trades"]
-    #     )
-    #     logger.debug("Refreshing TRADES data for %d pairs", len(pair_list))
-    #     results_df = {}
-    #     trades_dl_jobs = []
-    #     for pair_wt in set(pair_list):
-    #         trades_dl_jobs.append(self._build_trades_dl_jobs(pair_wt, data_handler, cache))
+    def get_producer_pairs(self, producer_name: str = "default") -> list[str]:
+        """
+        Get the pairs cached from the producer
 
-    #     async def gather_coroutines(coro):
-    #         return await asyncio.gather(*coro, return_exceptions=True)
+        :returns: List of pairs
+        """
+        return self.__producer_pairs.get(producer_name, []).copy()
 
-    #     for dl_job_chunk in chunks(trades_dl_jobs, 100):
-    #         with self._loop_lock:
-    #             results = self.loop.run_until_complete(gather_coroutines(dl_job_chunk))
 
-    #         for res in results:
-    #             if isinstance(res, Exception):
-    #                 logger.warning(f"Async code raised an exception: {repr(res)}")
-    #                 continue
-    #             pairwt, trades_df = res
-    #             if trades_df is not None:
-    #                 results_df[pairwt] = trades_df
 
-    #     return results_df
+    def get_producer_df(
+        self,
+        pair: str,
+        timeframe: str | None = None,
+        candle_type: CandleType | None = None,
+        producer_name: str = "default",
+    ) -> tuple[DataFrame, datetime]:
+        """
+        Get the pair data from producers.
 
-         
+        :param pair: pair to get the data for
+        :param timeframe: Timeframe to get data for
+        :param candle_type: Any of the enum CandleType (must match trading mode!)
+        :returns: Tuple of the DataFrame and last analyzed timestamp
+        """
+        _timeframe = self._default_timeframe if not timeframe else timeframe
+        _candle_type = self._default_candle_type if not candle_type else candle_type
+
+        pair_key = (pair, _timeframe, _candle_type)
+
+        # If we have no data from this Producer yet
+        if producer_name not in self.__producer_pairs_df:
+            # We don't have this data yet, return empty DataFrame and datetime (01-01-1970)
+            return (DataFrame(), datetime.fromtimestamp(0, tz=UTC))
+
+        # If we do have data from that Producer, but no data on this pair_key
+        if pair_key not in self.__producer_pairs_df[producer_name]:
+            # We don't have this data yet, return empty DataFrame and datetime (01-01-1970)
+            return (DataFrame(), datetime.fromtimestamp(0, tz=UTC))
+
+        # We have it, return this data
+        df, la = self.__producer_pairs_df[producer_name][pair_key]
+        return (df.copy(), la)
+
+    def add_pairlisthandler(self, pairlists) -> None:
+        """
+        Allow adding pairlisthandler after initialization
+        """
+        self._pairlists = pairlists
+
+    def historic_ohlcv(self, pair: str, timeframe: str, candle_type: str = "") -> DataFrame:
+        """
+        Get stored historical candle (OHLCV) data
+        :param pair: pair to get the data for
+        :param timeframe: timeframe to get data for
+        :param candle_type: '', mark, index, premiumIndex, or funding_rate
+        """
+        _candle_type = (
+            CandleType.from_string(candle_type)
+            if candle_type != ""
+            else self._config["candle_type_def"]
+        )
+        saved_pair: PairWithTimeframe = (pair, str(timeframe), _candle_type)
+        if saved_pair not in self.__cached_pairs_backtesting:
+            timerange = TimeRange.parse_timerange(
+                None
+                if self._config.get("timerange") is None
+                else str(self._config.get("timerange"))
+            )
+
+            startup_candles = self.get_required_startup(str(timeframe))
+            tf_seconds = timeframe_to_seconds(str(timeframe))
+            timerange.subtract_start(tf_seconds * startup_candles)
+
+            logger.info(
+                f"Loading data for {pair} {timeframe} "
+                f"from {timerange.start_fmt} to {timerange.stop_fmt}"
+            )
+
+            self.__cached_pairs_backtesting[saved_pair] = load_pair_history(
+                pair=pair,
+                timeframe=timeframe,
+                datadir=self._config["datadir"],
+                timerange=timerange,
+                data_format=self._config["dataformat_ohlcv"],
+                candle_type=_candle_type,
+            )
+        return self.__cached_pairs_backtesting[saved_pair].copy()
+
+    def get_required_startup(self, timeframe: str) -> int:
+        freqai_config = self._config.get("freqai", {})
+        if not freqai_config.get("enabled", False):
+            return self._config.get("startup_candle_count", 0)
+        else:
+            startup_candles = self._config.get("startup_candle_count", 0)
+            indicator_periods = freqai_config["feature_parameters"]["indicator_periods_candles"]
+            # make sure the startupcandles is at least the set maximum indicator periods
+            self._config["startup_candle_count"] = max(startup_candles, max(indicator_periods))
+            tf_seconds = timeframe_to_seconds(timeframe)
+            train_candles = freqai_config["train_period_days"] * 86400 / tf_seconds
+            total_candles = int(self._config["startup_candle_count"] + train_candles)
+            logger.info(
+                f"Increasing startup_candle_count for freqai on {timeframe} to {total_candles}"
+            )
+        return total_candles
+
+    def get_pair_dataframe(
+        self, pair: str, timeframe: str | None = None, candle_type: str = ""
+    ) -> DataFrame:
+        """
+        Return pair candle (OHLCV) data, either live or cached historical -- depending
+        on the runmode.
+        Only combinations in the pairlist or which have been specified as informative pairs
+        will be available.
+        :param pair: pair to get the data for
+        :param timeframe: timeframe to get data for
+        :return: Dataframe for this pair
+        :param candle_type: '', mark, index, premiumIndex, or funding_rate
+        """
+        if self.runmode in (RunMode.DRY_RUN, RunMode.LIVE):
+            # Get live OHLCV data.
+            data = self.ohlcv(pair=pair, timeframe=timeframe, candle_type=candle_type)
+        else:
+            # Get historical OHLCV data (cached on disk).
+            timeframe = timeframe or self._config["timeframe"]
+            data = self.historic_ohlcv(pair=pair, timeframe=timeframe, candle_type=candle_type)
+            # Cut date to timeframe-specific date.
+            # This is necessary to prevent lookahead bias in callbacks through informative pairs.
+            if self.__slice_date:
+                cutoff_date = timeframe_to_prev_date(timeframe, self.__slice_date)
+                data = data.loc[data["date"] < cutoff_date]
+        if len(data) == 0:
+            logger.warning(f"No data found for ({pair}, {timeframe}, {candle_type}).")
+        return data
+
+    def get_analyzed_dataframe(self, pair: str, timeframe: str) -> tuple[DataFrame, datetime]:
+        """
+        Retrieve the analyzed dataframe. Returns the full dataframe in trade mode (live / dry),
+        and the last 1000 candles (up to the time evaluated at this moment) in all other modes.
+        :param pair: pair to get the data for
+        :param timeframe: timeframe to get data for
+        :return: Tuple of (Analyzed Dataframe, lastrefreshed) for the requested pair / timeframe
+            combination.
+            Returns empty dataframe and Epoch 0 (1970-01-01) if no dataframe was cached.
+        """
+        pair_key = (pair, timeframe, self._config.get("candle_type_def", CandleType.SPOT))
+        if pair_key in self.__cached_pairs:
+            if self.runmode in (RunMode.DRY_RUN, RunMode.LIVE):
+                df, date = self.__cached_pairs[pair_key]
+            else:
+                df, date = self.__cached_pairs[pair_key]
+                if (max_index := self.__slice_index.get(pair)) is not None:
+                    df = df.iloc[max(0, max_index - MAX_DATAFRAME_CANDLES) : max_index]
+                else:
+                    return (DataFrame(), datetime.fromtimestamp(0, tz=UTC))
+            return df, date
+        else:
+            return (DataFrame(), datetime.fromtimestamp(0, tz=UTC))
+
+    @property
+    def runmode(self) -> RunMode:
+        """
+        Get runmode of the bot
+        can be "live", "dry-run", "backtest", "edgecli", "hyperopt" or "other".
+        """
+        return RunMode(self._config.get("runmode", RunMode.OTHER))
+
+    def current_whitelist(self) -> list[str]:
+        """
+        fetch latest available whitelist.
+
+        Useful when you have a large whitelist and need to call each pair as an informative pair.
+        As available pairs does not show whitelist until after informative pairs have been cached.
+        :return: list of pairs in whitelist
+        """
+
+        if self._pairlists:
+            return self._pairlists.whitelist.copy()
+        else:
+            raise OperationalException("Dataprovider was not initialized with a pairlist provider.")
+
+    def clear_cache(self):
+        """
+        Clear pair dataframe cache.
+        """
+        self.__cached_pairs = {}
+        # Don't reset backtesting pairs -
+        # otherwise they're reloaded each time during hyperopt due to with analyze_per_epoch
+        # self.__cached_pairs_backtesting = {}
+        self.__slice_index = {}
+
+
+
+
+
+    def refresh_latest_trades(self, pairlist: ListPairsWithTimeframes) -> None:
+        """
+        Refresh latest trades data (if enabled in config)
+        """
+
+        use_public_trades = self._config.get("exchange", {}).get("use_public_trades", False)
+        if use_public_trades:
+            if self._exchange:
+                self._exchange.refresh_latest_trades(pairlist)
+
+    @property
+    def available_pairs(self) -> ListPairsWithTimeframes:
+        """
+        Return a list of tuples containing (pair, timeframe) for which data is currently cached.
+        Should be whitelist + open trades.
+        """
+        if self._exchange is None:
+            raise OperationalException(NO_EXCHANGE_EXCEPTION)
+        return list(self._exchange._klines.keys())
+
+    def ohlcv(
+        self, pair: str, timeframe: str | None = None, copy: bool = True, candle_type: str = ""
+    ) -> DataFrame:
+        """
+        Get candle (OHLCV) data for the given pair as DataFrame
+        Please use the `available_pairs` method to verify which pairs are currently cached.
+        :param pair: pair to get the data for
+        :param timeframe: Timeframe to get data for
+        :param candle_type: '', mark, index, premiumIndex, or funding_rate
+        :param copy: copy dataframe before returning if True.
+                     Use False only for read-only operations (where the dataframe is not modified)
+        """
+        if self._exchange is None:
+            raise OperationalException(NO_EXCHANGE_EXCEPTION)
+        if self.runmode in (RunMode.DRY_RUN, RunMode.LIVE):
+            _candle_type = (
+                CandleType.from_string(candle_type)
+                if candle_type != ""
+                else self._config["candle_type_def"]
+            )
+            return self._exchange.klines(
+                (pair, timeframe or self._config["timeframe"], _candle_type), copy=copy
+            )
+        else:
+            return DataFrame()
+
+    def trades(
+        self, pair: str, timeframe: str | None = None, copy: bool = True, candle_type: str = ""
+    ) -> DataFrame:
+        """
+        Get candle (TRADES) data for the given pair as DataFrame
+        Please use the `available_pairs` method to verify which pairs are currently cached.
+        This is not meant to be used in callbacks because of lookahead bias.
+        :param pair: pair to get the data for
+        :param timeframe: Timeframe to get data for
+        :param candle_type: '', mark, index, premiumIndex, or funding_rate
+        :param copy: copy dataframe before returning if True.
+                     Use False only for read-only operations (where the dataframe is not modified)
+        """
+        if self.runmode in (RunMode.DRY_RUN, RunMode.LIVE):
+            if self._exchange is None:
+                raise OperationalException(NO_EXCHANGE_EXCEPTION)
+            _candle_type = (
+                CandleType.from_string(candle_type)
+                if candle_type != ""
+                else self._config["candle_type_def"]
+            )
+            return self._exchange.trades(
+                (pair, timeframe or self._config["timeframe"], _candle_type), copy=copy
+            )
+        else:
+            data_handler = get_datahandler(
+                self._config["datadir"], data_format=self._config["dataformat_trades"]
+            )
+            trades_df = data_handler.trades_load(
+                pair, self._config.get("trading_mode", TradingMode.SPOT)
+            )
+            return trades_df
+
+    def market(self, pair: str) -> dict[str, Any] | None:
+        """
+        Return market data for the pair
+        :param pair: Pair to get the data for
+        :return: Market data dict from ccxt or None if market info is not available for the pair
+        """
+        if self._exchange is None:
+            raise OperationalException(NO_EXCHANGE_EXCEPTION)
+        return self._exchange.markets.get(pair)
+
+    def ticker(self, pair: str):
+        """
+        Return last ticker data from exchange
+        :param pair: Pair to get the data for
+        :return: Ticker dict from exchange or empty dict if ticker is not available for the pair
+        """
+        if self._exchange is None:
+            raise OperationalException(NO_EXCHANGE_EXCEPTION)
+        try:
+            return self._exchange.fetch_ticker(pair)
+        except ExchangeError:
+            return {}
+
+    def orderbook(self, pair: str, maximum: int) -> OrderBook:
+        """
+        Fetch latest l2 orderbook data
+        Warning: Does a network request - so use with common sense.
+        :param pair: pair to get the data for
+        :param maximum: Maximum number of orderbook entries to query
+        :return: dict including bids/asks with a total of `maximum` entries.
+        """
+        if self._exchange is None:
+            raise OperationalException(NO_EXCHANGE_EXCEPTION)
+        return self._exchange.fetch_l2_order_book(pair, maximum)
+

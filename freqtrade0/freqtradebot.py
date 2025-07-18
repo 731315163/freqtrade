@@ -3,17 +3,17 @@ Freqtrade is the main module of this bot. It contains the class Freqtrade()
 """
 
 import asyncio
+from collections.abc import Callable
 from copy import deepcopy
-from datetime import datetime, time, timedelta, timezone
+from datetime import UTC, datetime, time, timedelta
 from threading import Lock
-from typing import Callable, cast
+from typing import cast
 
 import jsonschema
 from pandas import DataFrame
 from schedule import Scheduler
 
 import freqtrade.freqtradebot
-
 from freqtrade.configuration import validate_config_consistency
 from freqtrade.constants import Config, ExchangeConfig
 from freqtrade.edge import Edge
@@ -41,16 +41,14 @@ from freqtrade.plugins.pairlistmanager import PairListManager
 from freqtrade.plugins.protectionmanager import ProtectionManager
 from freqtrade.rpc import RPCManager
 from freqtrade.rpc.external_message_consumer import ExternalMessageConsumer
-from freqtrade.strategy.informative_decorator import informative
 from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 from freqtrade.util import FtPrecise, MeasureTime, PeriodicCache, dt_now
 from freqtrade.wallets import Wallets
-
-
 from freqtrade0.data.dataprovider import DataProvider
 from freqtrade0.enums import LoopMode, TradeDirection
 from freqtrade0.resolvers import ExchangeResolver, StrategyResolver
 from freqtrade0.strategy import IStrategy
+
 
 logger = freqtrade.freqtradebot.logger
 class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
@@ -58,7 +56,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
     Freqtrade is the main class of the bot.
     This is from here the bot start its logic.
     """
-    
+
     def __init__(self, config: Config,strategy_type:type|None=None) -> None:
         """
         Init all variables and objects the bot needs to work
@@ -88,8 +86,8 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         except jsonschema.ValidationError as e :
             logger.error(e)
 
-      
-      
+
+
         self.exchange: Exchange = ExchangeResolver.load_exchange(
             self.config, exchange_config=exchange_config, load_leverage_tiers=True
         )
@@ -200,7 +198,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         """
         now_time = dt_now()
         internal = timedelta(seconds=self.refresh_period)
-        delkeys = [] 
+        delkeys = []
         for k  ,v in self.log_cache.items():
             if now_time - v > internal:
                 delkeys.append(k)
@@ -209,14 +207,14 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         if message not in self.log_cache:
             logmethod(message)
             self.log_cache[message] = now_time
-     
+
     def _getpairlist(self,informative_pairlist):
         trades: list[Trade] = Trade.get_open_trades()
         self.active_pair_whitelist = self._refresh_active_whitelist(trades)
         pairlist = self.pairlists.create_pair_list(self.active_pair_whitelist)
         res_pair_list = pairlist + informative_pairlist if informative_pairlist else pairlist
         return res_pair_list
-    
+
     def _get_ohlcv_set(self):
         informative_pairlist =self.strategy.gather_informative_pairs()
         _pairs = self._getpairlist(informative_pairlist)
@@ -227,10 +225,9 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         self.pre_ohlcv_whitelist = ohlcv_pairs
         while ohlcv_pairs == self.pre_ohlcv_whitelist:
             ohlcv_pairs = self._get_tradesset()
-            await self.dataprovider.build_trades_job(pairs_wt=ohlcv_pairs)
+            await self.dataprovider.build_ohlcv_job(pairs_wt=ohlcv_pairs)
             logger.info("refresh_ohlcv")
             self.pre_ohlcv_whitelist = ohlcv_pairs
-            
 
     def _get_tradesset(self):
         informative_pairlist =self.strategy.gather_informative_trade_pairs()
@@ -244,9 +241,9 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             await self.dataprovider.build_trades_job(pairs_wt=trade_pairs)
             logger.info("refresh_trades")
             self.pre_trades_whitelist = trade_pairs
-            
 
-        
+
+
     def process(self) -> None:
         """
         Queries the persistence layer for open trades and handles them,
@@ -260,9 +257,9 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         self.update_trades_without_assigned_fees()
 
         # Query trades from persistence layer
-       
+
         strategy_safe_wrapper(self.strategy.bot_loop_start, supress_error=True)(
-            current_time=datetime.now(timezone.utc)
+            current_time=datetime.now(UTC)
         )
 
         with self._measure_execution:
@@ -289,26 +286,26 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         # Then looking for entry opportunities
         if self.state == State.RUNNING and self.get_free_open_trades():
             self.enter_positions()
-               
+
         self._schedule.run_pending()
         Trade.commit()
         self.rpc.process_msg_queue(self.dataprovider._msg_queue)
-        self.last_process = datetime.now(timezone.utc)
+        self.last_process = datetime.now(UTC)
 
 
- 
+
     def _get_nolock_whitelist(self,can_hedge_mode: bool=False) -> dict[str,TradeDirection]:
         """
-        获取非锁定状态下的白名单，若存在全局锁定则返回空列表或 None。
+        获取非锁定状态下的白名单 若存在全局锁定则返回空列表或 None。
         """
         # 创建白名单的深拷贝
         whitelist = self.active_pair_whitelist
-        
-        # 如果白名单为空，记录日志并返回
+
+        # 如果白名单为空 记录日志并返回
         if not whitelist:
             self.log_once("Active pair whitelist is empty.", logger.info)
             return {}
-        
+
         def del_pair(pair:str,side:str,tradepairs:dict[str,TradeDirection]):
             if pair not in tradepairs:
                 return False
@@ -321,7 +318,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 del tradepairs[pair]
                 return True
             return False
-            
+
         tradepairs:dict[str,TradeDirection] = { pair:TradeDirection.NONE for pair in whitelist}
         tradepairs["*"] = TradeDirection.NONE
         for pairlock in PairLocks.get_pair_locks(pair=None):
@@ -332,7 +329,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 rf"Pair {pairlock.pair} {pairlock.side} is locked. datetime until {pairlock.lock_end_time}",
                 logger.info,
             )
-        
+
         global_lock_side = tradepairs.pop("*")
         if  global_lock_side == TradeDirection.BOTH:
                 self.log_once("Global pairlock active. Not creating new trades.", logger.info)
@@ -341,7 +338,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 for k ,v in tradepairs.items():
                     tradepairs[k] = v | global_lock_side
 
-        
+
         for trade in Trade.get_open_trades():
             trade = cast(Trade, trade)
             del_pair(trade.pair,side=trade.trade_direction,tradepairs=tradepairs)
@@ -351,7 +348,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 logger.info,
             )
         return tradepairs
-   
+
     #
     # enter positions / open trades logic and methods
     #
@@ -367,7 +364,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 pair, self.config["max_open_trades"], self.edge
             )
         return self.execute_entry(pair=pair, stake_amount=stake_amount, price=price,is_short=(signal==SignalDirection.SHORT),enter_tag=entry_tag)
- 
+
 
     def create_trade(self, pair: str,*,direction:TradeDirection=TradeDirection.NONE,df:DataFrame|None =None) -> bool:
         """
@@ -378,14 +375,14 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
 
         :return: True if a trade has been created.
         """
-       
+
         if df is not None and df.empty == False:
             analyzed_df = df
         else:
             analyzed_df, _ = self.dataprovider.get_analyzed_dataframe(pair, self.strategy.timeframe)
         # nowtime = analyzed_df.iloc[-1]["date"] if len(analyzed_df) > 0 else None
 
-        
+
 
         # running get_signal on historical data fetched
         #价格或交易都可以直接返回none
@@ -410,12 +407,12 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 )
             else:
                 return False
-        
-        
+
+
         return self.execute_entry(
             pair=pair, stake_amount=stake_amount ,enter_tag=enter_tag, is_short=(signal == SignalDirection.SHORT)
         )
-      
+
     def enter_positions(self) -> int:
         whitelist = self._get_nolock_whitelist(can_hedge_mode=self.strategy.can_hedge_mode)
         trades_created = 0
@@ -423,7 +420,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         refrence_ohlc = {}
         if len(whitelist) > 0:
             for pair,direction in whitelist.items():
-                
+
                 try:
                     analyzed_df, _ = self.dataprovider.get_analyzed_dataframe(pair=pair, timeframe=self.strategy.timeframe)
                     if not analyzed_df.empty and "date" in analyzed_df.columns:
@@ -433,26 +430,26 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                         refrence_ohlc[latest_time]=pair_list
                     else:
                         self.log_once(f"Found no ohlc data for {pair},unable to create trade.", logger.debug)
-                    
+
                     if  self.get_free_open_trades() <= 0:
                         self.log_once(f"not opening new trade for {pair},free open trades is less than 0.", logger.info)
                         break
-                    
+
                     with self._exit_lock:
                             loopmode = self.strategy.loop_mode
-                            if loopmode == LoopMode.Tick or loopmode == LoopMode.All:                           
+                            if loopmode == LoopMode.Tick or loopmode == LoopMode.All:
                                 trades_created += self._create_trade_bytickle(pair,direction= direction,df= analyzed_df)
                             if loopmode == LoopMode.NewCandle or loopmode == LoopMode.All:
                                 trades_created_ohlc += self.create_trade(pair,direction= direction,df=analyzed_df)
                 except DependencyException as exception:
                     logger.warning("Unable to create trade for %s: %s", pair, exception)
-            
+
             msg=""
             for t,p in refrence_ohlc.items():
                 p_str = ",".join(p)
                 msg+=f"{t}:{p_str}\n"
             if (trades_created+trades_created_ohlc)==0:
-                logger.info( f"Found no enter signals for whitelisted currencies.")
+                logger.info( "Found no enter signals for whitelisted currencies.")
             else:
                 self.log_once(f"refresh data {msg}...", logger.info)
         return trades_created+trades_created_ohlc
@@ -489,7 +486,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             self.log_once(f"Calling adjust_trade_position for pair {trade.pair}",logger.info)
             stake_amount, price,order_tag = self.strategy._adjust_trade_position_internal(
                 trade=trade,
-                current_time=datetime.now(timezone.utc),
+                current_time=datetime.now(UTC),
                 current_rate=current_entry_rate,
                 current_profit=current_profit,
                 min_stake=min_entry_stake,

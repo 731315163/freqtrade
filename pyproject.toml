@@ -13,7 +13,7 @@ authors = [
 
 description = "Freqtrade - Crypto Trading Bot"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 
 license = {text = "GPLv3"}
 classifiers = [
@@ -76,6 +76,8 @@ dependencies = [
   "numexpr==2.10.2",
   "certifi==2025.4.26",
   "scikit-optimize>=0.10.2",
+  "communication",
+  "tradepulse",
 ]
 
 [project.optional-dependencies]
@@ -340,3 +342,8 @@ exclude = [
 [tool.codespell]
 ignore-words-list = "coo,fo,strat,zar,selectin"
 skip="*.svg,./user_data,freqtrade/rpc/api_server/ui/installed,freqtrade/exchange/*.json"
+
+[tool.uv.sources]
+communication = { git = "https://github.com/731315163/communication.git" }
+fetchdata = { path = "../fetchdata/dist/fetchdata-0.1.0.tar.gz" }
+tradepulse = { path = "../fetchdata/dist/tradepulse-0.1.0.tar.gz" }
