@@ -16,7 +16,6 @@ from schedule import Scheduler
 import freqtrade.freqtradebot
 from freqtrade.configuration import validate_config_consistency
 from freqtrade.constants import Config, ExchangeConfig
-from freqtrade.edge import Edge
 from freqtrade.enums import (
     ExitCheckTuple,
     ExitType,
@@ -25,13 +24,8 @@ from freqtrade.enums import (
     State,
     TradingMode,
 )
-from freqtrade.exceptions import (
-    DependencyException,
-)
-from freqtrade.exchange import (
-    remove_exchange_credentials,
-    timeframe_to_seconds,
-)
+from freqtrade.exceptions import DependencyException
+from freqtrade.exchange import timeframe_to_seconds
 from freqtrade.exchange.exchange import Exchange
 from freqtrade.mixins import LoggingMixin
 from freqtrade.persistence import PairLocks, Trade, init_db
@@ -74,7 +68,6 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         self.config = config
         exchange_config: ExchangeConfig = deepcopy(config["exchange"])
         # Remove credentials from original exchange config to avoid accidental credential exposure
-        remove_exchange_credentials(config["exchange"], True)
         if strategy_type:
             self.strategy :IStrategy= StrategyResolver.create_strategy(strategy_type=strategy_type,config=self.config)
         else:
@@ -118,13 +111,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         # Attach Wallets to strategy instance
         self.strategy.wallets = self.wallets
 
-        # Initializing Edge only if enabled
-        self.edge = (
-            Edge(self.config, self.exchange, self.strategy)
-            if self.config.get("edge", {}).get("enabled", False)
-            else None
-        )
-
+      
         # Init ExternalMessageConsumer if enabled
         self.emc = (
             ExternalMessageConsumer(self.config, self.dataprovider)
