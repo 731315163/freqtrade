@@ -41,8 +41,8 @@ class IStrategy(strategy.IStrategy):
         timeframe -> str: value of the timeframe to use with the strategy
     """
 
-
-
+   
+    can_short: bool = True
     can_hedge_mode: bool = True
     loop_mode:LoopMode = LoopMode.All
     def __init__(self, config: Config) -> None:
