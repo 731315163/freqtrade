@@ -4,115 +4,55 @@ Cryptocurrency Exchanges support
 """
 
 import asyncio
-import inspect
-import logging
-import signal
-from collections.abc import Coroutine, Generator, Iterable
+from collections.abc import Iterable
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
-from math import floor, isnan
+from datetime import timedelta
 from threading import Lock
-from typing import Any, Literal, TypeGuard, TypeVar
+from typing import Any, TypeVar
 
 import ccxt
 import ccxt.pro as ccxt_pro
 from cachetools import TTLCache
-from ccxt import TICK_SIZE
-from dateutil import parser
-from pandas import DataFrame, concat
+from pandas import DataFrame
 
-from freqtrade0.exchange.exchange_ws import ExchangeWS
 from freqtrade.constants import (  # List of pairs with their timeframes; Type for trades list; ticks, pair, timeframe, CandleType
-    DEFAULT_AMOUNT_RESERVE_PERCENT,
     DEFAULT_TRADES_COLUMNS,
-    NON_OPEN_EXCHANGE_STATES,
-    BidAsk,
-    BuySell,
     Config,
-    EntryExit,
     ExchangeConfig,
     ListPairsWithTimeframes,
-    ListTicksWithTimeframes,
-    MakerTaker,
-    OBLiteral,
     PairWithTimeframe,
-    TickWithTimeframe,
     TradeList,
 )
 from freqtrade.data.converter import (
-    clean_ohlcv_dataframe,
-    ohlcv_to_dataframe,
-    trades_df_remove_duplicates,
     trades_dict_to_list,
-    trades_list_to_df,
 )
 from freqtrade.enums import (
-    OPTIMIZE_MODES,
     TRADE_MODES,
     CandleType,
     MarginMode,
-    PriceType,
-    RunMode,
     TradingMode,
 )
 from freqtrade.exceptions import (
-    ConfigurationError,
     DDosProtection,
-    ExchangeError,
-    InsufficientFundsError,
-    InvalidOrderException,
     OperationalException,
-    PricingError,
-    RetryableOrderError,
     TemporaryError,
 )
 from freqtrade.exchange import exchange
 from freqtrade.exchange.common import (
-    API_FETCH_ORDER_RETRY_COUNT,
-    remove_exchange_credentials,
-    retrier,
     retrier_async,
 )
-from freqtrade.exchange.exchange_types import (
-    CcxtBalances,
-    CcxtOrder,
-    CcxtPosition,
-    FtHas,
-    OHLCVResponse,
-    OrderBook,
-    Ticker,
-    Tickers,
-)
-from freqtrade.exchange.exchange_utils import (
-    ROUND,
-    ROUND_DOWN,
-    ROUND_UP,
-    amount_to_contract_precision,
-    amount_to_contracts,
-    amount_to_precision,
-    contracts_to_amount,
-    date_minus_candles,
-    is_exchange_known_ccxt,
-    market_is_active,
-    price_to_precision,
-)
 from freqtrade.exchange.exchange_utils_timeframe import (
-    timeframe_to_minutes,
-    timeframe_to_msecs,
     timeframe_to_next_date,
     timeframe_to_prev_date,
     timeframe_to_seconds,
 )
 from freqtrade.misc import (
-    chunks,
     deep_merge_dicts,
-    file_dump_json,
-    file_load_json,
-    safe_value_fallback2,
 )
-from freqtrade.util import dt_from_ts, dt_now
-from freqtrade.util.datetime_helpers import dt_humanize_delta, dt_ts, format_ms_time
+from freqtrade.util import dt_from_ts
+from freqtrade.util.datetime_helpers import dt_ts
 from freqtrade.util.periodic_cache import PeriodicCache
+from freqtrade0.exchange.exchange_ws import ExchangeWS
 
 
 logger = exchange.logger
@@ -120,7 +60,7 @@ T = TypeVar("T")
 
 
 class Exchange(exchange.Exchange):
-   
+
     def __init__(
         self,
         config: Config,
@@ -178,7 +118,7 @@ class Exchange(exchange.Exchange):
             logger.info("Instance is running with dry_run enabled")
         logger.info(f"Using CCXT {ccxt.__version__}")
         exchange_conf: dict[str, Any] = exchange_config if exchange_config else config["exchange"]
-        remove_exchange_credentials(exchange_conf, config.get("dry_run", False))
+       
         self.log_responses = exchange_conf.get("log_responses", False)
 
         # Leverage properties

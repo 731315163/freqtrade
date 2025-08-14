@@ -13,6 +13,7 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 
+import polars as pl
 from pandas import DataFrame
 from tradepulse.exchange import ExchangeABC, ExchangeFactory
 
@@ -105,7 +106,10 @@ class DataProvider(dataprovider.DataProvider):
         self.external_data_enabled = len(self.producers) > 0
 
         # custom define
-        self._exchangeABC: ExchangeABC = ExchangeFactory.get_exchange("",config=config)
+        exchange_name = exchange.name if exchange else""
+        if exchange_name is None or exchange_name.strip() == "":
+          exchange_name = self._config.get("exchange", {}).get("name", "binance")
+        self._exchangeABC: ExchangeABC = ExchangeFactory.get_exchange(exchange_name,config=config)
     def _now_is_time_to_refresh_trades(
             self, pair: str, timeframe: str, candle_type: CandleType
         ) -> bool:  # Timeframe in seconds
@@ -167,7 +171,6 @@ class DataProvider(dataprovider.DataProvider):
             for pair_wt in pairs_wt:
                 pair, timeframe, candle_type = pair_wt
                 tg.create_task( self._exchangeABC.trades(symbol = pair,since = 0,marketType = candle_type))
-
 
 
 
@@ -390,6 +393,7 @@ class DataProvider(dataprovider.DataProvider):
     def ohlcv(
         self, pair: str, timeframe: str | None = None, copy: bool = True, candle_type: str = ""
     ) -> DataFrame:
+        
         """
         Get candle (OHLCV) data for the given pair as DataFrame
         Please use the `available_pairs` method to verify which pairs are currently cached.
@@ -399,19 +403,29 @@ class DataProvider(dataprovider.DataProvider):
         :param copy: copy dataframe before returning if True.
                      Use False only for read-only operations (where the dataframe is not modified)
         """
-        if self._exchange is None:
-            raise OperationalException(NO_EXCHANGE_EXCEPTION)
-        if self.runmode in (RunMode.DRY_RUN, RunMode.LIVE):
-            _candle_type = (
-                CandleType.from_string(candle_type)
-                if candle_type != ""
-                else self._config["candle_type_def"]
-            )
-            return self._exchange.klines(
-                (pair, timeframe or self._config["timeframe"], _candle_type), copy=copy
-            )
-        else:
-            return DataFrame()
+        return DataFrame()
+        # if self._exchange is None:
+        #     raise OperationalException(NO_EXCHANGE_EXCEPTION)
+        # if self.runmode in (RunMode.DRY_RUN, RunMode.LIVE):
+        #     _candle_type = (
+        #         CandleType.from_string(candle_type)
+        #         if candle_type != ""
+        #         else self._config["candle_type_def"]
+        #     )
+            
+        #     match _candle_type: 
+        #       case CandleType.SPOT |  CandleType.FUTURES:
+        #         dataframe:pl.DataFrame = await self._exchangeABC.ohlcv(symbol=pair,timeframe= timeframe or self._config["timeframe"],since=0,marketType=str(_candle_type))
+        #       case CandleType.FUNDING_RATE:
+        #         dataframe = self._exchange.funding_rates(symbol=pair,timeframe= timeframe or self._config["timeframe"],since=0)
+        #       case _:
+        #             raise TypeError(f"Invalid candle_type: {candle_type}")
+        #     df = dataframe.to_pandas()
+        #     return self._exchange.klines(
+        #         (pair, timeframe or self._config["timeframe"], _candle_type), copy=copy
+        #     )
+        # else:
+        #     return DataFrame()
 
     def trades(
         self, pair: str, timeframe: str | None = None, copy: bool = True, candle_type: str = ""

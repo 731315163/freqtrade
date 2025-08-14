@@ -3,23 +3,20 @@ Main Freqtrade worker class.
 """
 
 import asyncio
-from datetime import datetime, timedelta
 import time
-import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
+from datetime import datetime, timedelta
 from os import getpid
-from typing import Any, Coroutine, overload
+from typing import Any, overload
 
-from numpy import isin
 import sdnotify
-from janus import T
 
 from freqtrade import __version__, worker
-from freqtrade0.freqtradebot import FreqtradeBot
 from freqtrade.configuration import Configuration
 from freqtrade.constants import PROCESS_THROTTLE_SECS, RETRY_TIMEOUT, Config
 from freqtrade.enums import RPCMessageType, State
 from freqtrade.exceptions import OperationalException, TemporaryError
+from freqtrade0.freqtradebot import FreqtradeBot
 
 
 logger = worker.logger
@@ -322,8 +319,4 @@ class Worker(worker.Worker):
         if sleep_duration > 0:
             await asyncio.sleep(sleep_duration)
 
-  
-   
-       
 
-    

@@ -16,7 +16,6 @@ from schedule import Scheduler
 import freqtrade.freqtradebot
 from freqtrade.configuration import validate_config_consistency
 from freqtrade.constants import Config, ExchangeConfig
-from freqtrade.edge import Edge
 from freqtrade.enums import (
     ExitCheckTuple,
     ExitType,
@@ -29,7 +28,6 @@ from freqtrade.exceptions import (
     DependencyException,
 )
 from freqtrade.exchange import (
-    remove_exchange_credentials,
     timeframe_to_seconds,
 )
 from freqtrade.exchange.exchange import Exchange
@@ -74,7 +72,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         self.config = config
         exchange_config: ExchangeConfig = deepcopy(config["exchange"])
         # Remove credentials from original exchange config to avoid accidental credential exposure
-        remove_exchange_credentials(config["exchange"], True)
+        # remove_exchange_credentials(config["exchange"], True)
         if strategy_type:
             self.strategy :IStrategy= StrategyResolver.create_strategy(strategy_type=strategy_type,config=self.config)
         else:
@@ -118,12 +116,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         # Attach Wallets to strategy instance
         self.strategy.wallets = self.wallets
 
-        # Initializing Edge only if enabled
-        self.edge = (
-            Edge(self.config, self.exchange, self.strategy)
-            if self.config.get("edge", {}).get("enabled", False)
-            else None
-        )
+      
 
         # Init ExternalMessageConsumer if enabled
         self.emc = (
@@ -241,6 +234,13 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             await self.dataprovider.build_trades_job(pairs_wt=trade_pairs)
             logger.info("refresh_trades")
             self.pre_trades_whitelist = trade_pairs
+    async def refresh(
+        self
+    ) -> None:
+        """
+        Refresh data, called with each cycle
+        """
+        await self.dataprovider._exchangeABC.update()
 
 
 
@@ -361,7 +361,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         if  signal is None or TradeDirection.convert(signal) & direction > TradeDirection.NONE :
             return False
         stake_amount = stake_amount if stake_amount else self.wallets.get_trade_stake_amount(
-                pair, self.config["max_open_trades"], self.edge
+                pair, self.config["max_open_trades"]
             )
         return self.execute_entry(pair=pair, stake_amount=stake_amount, price=price,is_short=(signal==SignalDirection.SHORT),enter_tag=entry_tag)
 
