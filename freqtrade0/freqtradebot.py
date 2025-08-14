@@ -49,26 +49,26 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
     """
 
  
-    def log_once(self, message: str, logmethod: Callable, force_show: bool = False) -> None:
-        """
-        Logs message - not more often than "refresh_period" to avoid log spamming
-        Logs the log-message as debug as well to simplify debugging.
-        :param message: String containing the message to be sent to the function.
-        :param logmethod: Function that'll be called. Most likely `logger.info`.
-        :param force_show: If True, sends the message regardless of show_output value.
-        :return: None.
-        """
-        now_time = dt_now()
-        internal = timedelta(seconds=self.refresh_period)
-        delkeys = []
-        for k  ,v in self.log_cache.items():
-            if now_time - v > internal:
-                delkeys.append(k)
-        for k in delkeys:
-            del self.log_cache[k]
-        if message not in self.log_cache:
-            logmethod(message)
-            self.log_cache[message] = now_time
+    # def log_once(self, message: str, logmethod: Callable, force_show: bool = False) -> None:
+    #     """
+    #     Logs message - not more often than "refresh_period" to avoid log spamming
+    #     Logs the log-message as debug as well to simplify debugging.
+    #     :param message: String containing the message to be sent to the function.
+    #     :param logmethod: Function that'll be called. Most likely `logger.info`.
+    #     :param force_show: If True, sends the message regardless of show_output value.
+    #     :return: None.
+    #     """
+    #     now_time = dt_now()
+    #     internal = timedelta(seconds=self.refresh_period)
+    #     delkeys = []
+    #     for k  ,v in self.log_cache.items():
+    #         if now_time - v > internal:
+    #             delkeys.append(k)
+    #     for k in delkeys:
+    #         del self.log_cache[k]
+    #     if message not in self.log_cache:
+    #         logmethod(message)
+    #         self.log_cache[message] = now_time
 
     def _getpairlist(self,informative_pairlist):
         trades: list[Trade] = Trade.get_open_trades()
@@ -77,17 +77,17 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         res_pair_list = pairlist + informative_pairlist if informative_pairlist else pairlist
         return res_pair_list
 
-    def _get_ohlcv_set(self):
-        informative_pairlist =self.strategy.gather_informative_pairs()
-        _pairs = self._getpairlist(informative_pairlist)
-        return set(_pairs)
+    # def _get_ohlcv_set(self):
+    #     informative_pairlist =self.strategy.gather_informative_pairs()
+    #     _pairs = self._getpairlist(informative_pairlist)
+    #     return set(_pairs)
 
 
 
-    def _get_tradesset(self):
-        informative_pairlist =self.strategy.gather_informative_trade_pairs()
-        trade_pairs = self._getpairlist(informative_pairlist)
-        return set(trade_pairs)
+    # def _get_tradesset(self):
+    #     informative_pairlist =self.strategy.gather_informative_trade_pairs()
+    #     trade_pairs = self._getpairlist(informative_pairlist)
+    #     return set(trade_pairs)
 
   
 
@@ -206,7 +206,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         )
 
     def enter_positions(self) -> int:
-        whitelist = self._get_nolock_whitelist(can_hedge_mode=self.strategy.can_hedge_mode)
+        whitelist = self._get_nolock_whitelist(can_hedge_mode=True)
         trades_created = 0
         trades_created_ohlc = 0
         refrence_ohlc = {}
