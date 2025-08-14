@@ -386,7 +386,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         if  signal is None  or TradeDirection.convert(signal) & direction > TradeDirection.NONE :
             return False
         stake_amount = self.wallets.get_trade_stake_amount(
-            pair, self.config["max_open_trades"], self.edge
+            pair, self.config["max_open_trades"]
         )
         bid_check_dom = self.config.get("entry_pricing", {}).get("check_depth_of_market", {})
         if (bid_check_dom.get("enabled", False)) and (

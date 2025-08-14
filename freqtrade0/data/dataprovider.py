@@ -35,14 +35,9 @@ from freqtrade.exceptions import (
     ExchangeError,
     OperationalException,
 )
-from freqtrade.exchange import timeframe_to_prev_date, timeframe_to_seconds
+from freqtrade.exchange import timeframe_to_msecs, timeframe_to_prev_date, timeframe_to_seconds
 from freqtrade.exchange.exchange_types import (
     OrderBook,
-)
-from freqtrade.exchange.exchange_utils_timeframe import (
-    timeframe_to_msecs,
-    timeframe_to_prev_date,
-    timeframe_to_seconds,
 )
 from freqtrade.rpc import RPCManager
 from freqtrade.util import PeriodicCache
