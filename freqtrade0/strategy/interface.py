@@ -3,11 +3,12 @@ IStrategy interface
 This module defines the interface to apply for strategies
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from pandas import DataFrame
 
+from freqtrade import strategy
 from freqtrade.constants import Config, ListPairsWithTimeframes
 from freqtrade.enums import (
     CandleType,
@@ -21,16 +22,13 @@ from freqtrade.strategy.informative_decorator import (
     PopulateIndicators,
     _format_pair_name,
 )
-from freqtrade.strategy.interface import remove_entry_exit_signals,logger
+from freqtrade.strategy.interface import logger, remove_entry_exit_signals
 from freqtrade.strategy.strategy_validation import StrategyResultValidator
 from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 from freqtrade.util import dt_now
 from freqtrade.util.datetime_helpers import dt_now
-from freqtrade import strategy
-
-
-
 from freqtrade0.enums import LoopMode
+
 
 class IStrategy(strategy.IStrategy):
     """
@@ -132,11 +130,11 @@ class IStrategy(strategy.IStrategy):
                     informative_pairs.append((pair, inf_data.timeframe, candle_type))
         informative_pairs.extend(self.__informative_pairs_freqai())
         return list(set(informative_pairs))
-    
-    
-    
+
+
+
     def loop_entry(self,pair:str,timestamp:datetime) ->None| tuple[Literal["long","short"],float|None]|tuple[Literal["long","short"],float|None,float|None|str]|tuple[Literal["long","short"],float|None,float|None,str]:
-        
+
         '''
         return tuple[Literal["long","short"]|None,float|None,float|None,str|None]|None:
         return a tuple of (side,amount,price,signal_name)|None for the entry signal
@@ -146,7 +144,7 @@ class IStrategy(strategy.IStrategy):
         signal_name: str
         '''
         pass
-   
+
 
     def _loop_entry(
         self,pair:str,timestamp:datetime,
@@ -163,7 +161,7 @@ class IStrategy(strategy.IStrategy):
            pair = pair,timestamp = timestamp,
             **kwargs
         )
-        
+
         result = None
         match resp:
             case (side, stake_amount, price, order_tag):
@@ -177,12 +175,12 @@ class IStrategy(strategy.IStrategy):
                 result=( side, stake_amount, None, "")
             case _:
                 return None
-        
+
         return result
-    
+
     def populate_all(self, dataframes:dict[str,tuple[ DataFrame,bool]], **kwargs) ->dict[str,tuple[ DataFrame,bool]]:
         return dataframes
-         
+
     def _analyze_all_signals(self, dataframes:dict[str,tuple[ DataFrame,bool]],candle_type, **kwargs) ->dict[str, tuple[ DataFrame,bool]]:
         result_dataframe= self.populate_all(dataframes, **kwargs)
         for pair, (dataframe,new_candle) in result_dataframe.items():
@@ -201,7 +199,7 @@ class IStrategy(strategy.IStrategy):
         :return: DataFrame of candle (OHLCV) data with indicator data and signals added
         """
         pair = str(metadata.get("pair"))
-        _last_seen = self._last_candle_seen_per_pair.get(pair, datetime.min.replace(tzinfo=timezone.utc))
+        _last_seen = self._last_candle_seen_per_pair.get(pair, datetime.min.replace(tzinfo=UTC))
         last_date = dataframe.iloc[-1]["date"]
         new_candle = False
         if last_date > _last_seen:
@@ -211,8 +209,8 @@ class IStrategy(strategy.IStrategy):
                 f"Last candle seen for {pair} is {_last_seen}, "
                 f"but last candle in dataframe is {last_date}"
             )
-         
-            
+
+
         # Test if seen this pair and last candle before.
         # always run if process_only_new_candles is set to false
         if not self.process_only_new_candles or new_candle:
@@ -231,7 +229,7 @@ class IStrategy(strategy.IStrategy):
         The analyzed dataframe is then accessible via `dp.get_analyzed_dataframe()`.
         :param pair: Pair to analyze.
         """
-      
+
         if not isinstance(dataframe, DataFrame) or dataframe.empty:
             # logger.warning("Empty candle (OHLCV) data for pair %s", pair)
             return ()
@@ -247,11 +245,11 @@ class IStrategy(strategy.IStrategy):
             return ()
 
         if dataframe.empty:
-            
+
             # logger.warning("Empty dataframe for pair %s", pair)
             return ()
         return dataframe,new_candle
-        
+
 
     def analyze(self, pairs: list[str]) -> None:
         """
@@ -269,7 +267,7 @@ class IStrategy(strategy.IStrategy):
                 dataframe,new_candle =result
                 pair_data[pair]=( dataframe,new_candle)
         pair_data = self._analyze_all_signals(dataframes=pair_data,candle_type=candle_type)
-       
+
 
     def _adjust_trade_position_internal(
         self,

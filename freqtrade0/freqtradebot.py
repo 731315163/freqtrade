@@ -24,12 +24,8 @@ from freqtrade.enums import (
     State,
     TradingMode,
 )
-from freqtrade.exceptions import (
-    DependencyException,
-)
-from freqtrade.exchange import (
-    timeframe_to_seconds,
-)
+from freqtrade.exceptions import DependencyException
+from freqtrade.exchange import timeframe_to_seconds
 from freqtrade.exchange.exchange import Exchange
 from freqtrade.mixins import LoggingMixin
 from freqtrade.persistence import PairLocks, Trade, init_db
@@ -72,7 +68,6 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         self.config = config
         exchange_config: ExchangeConfig = deepcopy(config["exchange"])
         # Remove credentials from original exchange config to avoid accidental credential exposure
-        # remove_exchange_credentials(config["exchange"], True)
         if strategy_type:
             self.strategy :IStrategy= StrategyResolver.create_strategy(strategy_type=strategy_type,config=self.config)
         else:
@@ -117,7 +112,6 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         self.strategy.wallets = self.wallets
 
       
-
         # Init ExternalMessageConsumer if enabled
         self.emc = (
             ExternalMessageConsumer(self.config, self.dataprovider)
