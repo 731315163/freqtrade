@@ -49,6 +49,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
     """
     def __init__(self, config: Config) -> None:
         super().__init__(config)
+        
  
     # def log_once(self, message: str, logmethod: Callable, force_show: bool = False) -> None:
     #     """
