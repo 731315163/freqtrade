@@ -241,3 +241,106 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             else:
                 self.log_once(f"refresh data {msg}...", logger.info)
         return trades_created+trades_created_ohlc
+    def check_and_call_adjust_trade_position(self, trade: Trade):
+            """
+            Check the implemented trading strategy for adjustment command.
+            If the strategy triggers the adjustment, a new order gets issued.
+            Once that completes, the existing trade is modified to match new data.
+            """
+            current_entry_rate, current_exit_rate = self.exchange.get_rates(
+                trade.pair, True, trade.is_short
+            )
+            current_entry_profit_struc: ProfitStruct = ProfitStruct(0,0,0,0)
+            match len(trade.select_filled_orders()) :
+                case l if l < 1:
+                    current_profit= 0
+                    current_exit_profit = 0
+                case _:
+                    current_profit = trade.calc_profit_ratio(current_entry_rate)
+                    current_exit_profit = trade.calc_profit_ratio(current_exit_rate)
+                    current_entry_profit_struc: ProfitStruct = trade.calculate_profit(current_entry_rate)
+            # i fix this calc_profit
+
+            min_entry_stake = self.exchange.get_min_pair_stake_amount(
+                trade.pair, current_entry_rate, 0.0, trade.leverage
+            )
+            min_exit_stake = self.exchange.get_min_pair_stake_amount(
+                trade.pair, current_exit_rate, self.strategy.stoploss, trade.leverage
+            )
+            max_entry_stake = self.exchange.get_max_pair_stake_amount(
+                trade.pair, current_entry_rate, trade.leverage
+            )
+            stake_available = self.wallets.get_available_stake_amount()
+            self.log_once(f"Calling adjust_trade_position for pair {trade.pair}",logger.info)
+            stake_amount, price,order_tag = self.strategy._adjust_trade_position_internal(
+                trade=trade,
+                current_time=datetime.now(UTC),
+                current_rate=current_entry_rate,
+                current_profit=current_profit,
+                min_stake=min_entry_stake,
+                max_stake=min(max_entry_stake, stake_available),
+                current_entry_rate=current_entry_rate,
+                current_exit_rate=current_exit_rate,
+                current_entry_profit=current_profit,
+                current_exit_profit=current_exit_profit,profit_struc=current_entry_profit_struc
+            )
+
+            if stake_amount is not None and stake_amount > 0.0:
+                if self.state == State.PAUSED:
+                    logger.debug("Position adjustment aborted because the bot is in PAUSED state")
+                    return
+
+                # We should increase our position
+                if self.strategy.max_entry_position_adjustment > -1:
+                    count_of_entries = trade.nr_of_successful_entries
+                    if count_of_entries > self.strategy.max_entry_position_adjustment:
+                        logger.debug(f"Max adjustment entries for {trade.pair} has been reached.")
+                        return
+                    else:
+                        logger.debug("Max adjustment entries is set to unlimited.")
+
+                self.execute_entry(
+                    trade.pair,
+                    stake_amount=stake_amount,
+                    price=price,
+                    trade=trade,
+                    is_short=trade.is_short,
+                    mode="pos_adjust",
+                    enter_tag=order_tag,
+                )
+
+            if stake_amount is not None and stake_amount < 0.0:
+                # We should decrease our position
+                amount = self.exchange.amount_to_contract_precision(
+                    trade.pair,
+                    abs(
+                        float(
+                            FtPrecise(stake_amount)
+                            * FtPrecise(trade.amount)
+                            / FtPrecise(trade.stake_amount)
+                        )
+                    ),
+                )
+
+                if amount == 0.0:
+                    logger.info(
+                        f"Wanted to exit of {stake_amount} amount, "
+                        "but exit amount is now 0.0 due to exchange limits - not exiting."
+                    )
+                    return
+
+                remaining = (trade.amount - amount) * price
+                if min_exit_stake and remaining != 0 and remaining < min_exit_stake:
+                    logger.info(
+                        f"Remaining amount of {remaining} would be smaller "
+                        f"than the minimum of {min_exit_stake}."
+                    )
+                    return
+
+                self.execute_trade_exit(
+                    trade,
+                    price,
+                    exit_check=ExitCheckTuple(exit_type=ExitType.PARTIAL_EXIT),
+                    sub_trade_amt=amount,
+                    exit_tag=order_tag,
+                )
