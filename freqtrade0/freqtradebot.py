@@ -535,7 +535,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                     )
                     return
 
-                remaining = (trade.amount - amount) * current_exit_rate
+                remaining = (trade.amount - amount) * price
                 if min_exit_stake and remaining != 0 and remaining < min_exit_stake:
                     logger.info(
                         f"Remaining amount of {remaining} would be smaller "
