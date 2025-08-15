@@ -158,24 +158,7 @@ class Worker(worker.Worker):
             await asyncio.sleep(self._throttle_secs)
     
     
-   
-   
-    # async def async_process_running_callback(self,callback) -> None:
-    #     try:
-    #         await callback()
-    #     except TemporaryError as error:
-    #         logger.warning(f"Error: {error}, retrying in {RETRY_TIMEOUT} seconds...")
-    #         await asyncio.sleep(RETRY_TIMEOUT)
-    #     except OperationalException:
-    #         tb = traceback.format_exc()
-    #         hint = "Issue `/start` if you think it is safe to restart."
-
-    #         self.freqtrade.notify_status(
-    #             f"*OperationalException:*\n```\n{tb}```\n {hint}", msg_type=RPCMessageType.EXCEPTION
-    #         )
-
-    #         logger.exception("OperationalException. Stopping trader ...")
-    #         self.freqtrade.state = State.STOPPED
+ 
     async def process(self):
         oldstate = None
         while True:
