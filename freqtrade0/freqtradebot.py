@@ -39,7 +39,7 @@ from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 from freqtrade.util import FtPrecise, MeasureTime, PeriodicCache, dt_now
 from freqtrade.wallets import Wallets
 from freqtrade0.enums import TradeDirection
-
+from freqtrade0.strategy import IStrategy
 
 logger = freqtrade.freqtradebot.logger
 class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
@@ -47,8 +47,129 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
     Freqtrade is the main class of the bot.
     This is from here the bot start its logic.
     """
-    def __init__(self, config: Config) -> None:
-        super().__init__(config)
+    def __init__(self, config: Config,strategy_type:type|None=None) -> None:
+        """
+        Init all variables and objects the bot needs to work
+        :param config: configuration dict, you can use Configuration.get_config()
+        to get the config dict.
+        """
+        self.log_cache:dict[str,datetime] = {}
+        self.refresh_period = 60
+        self.active_pair_whitelist: list[str] = []
+
+        # Init bot state
+        self.state = State.STOPPED
+
+        # Init objects
+        self.config = config
+        exchange_config: ExchangeConfig = deepcopy(config["exchange"])
+        # Remove credentials from original exchange config to avoid accidental credential exposure
+        if strategy_type:
+            self.strategy :IStrategy= StrategyResolver.create_strategy(strategy_type=strategy_type,config=self.config)
+        else:
+            self.strategy :IStrategy=cast(IStrategy, StrategyResolver.load_strategy(self.config))
+
+        # Check config consistency here since strategies can set certain options
+        try:
+            validate_config_consistency(config)
+        except jsonschema.ValidationError as e :
+            logger.error(e)
+
+
+
+        self.exchange: Exchange = ExchangeResolver.load_exchange(
+            self.config, exchange_config=exchange_config, load_leverage_tiers=True
+        )
+        init_db(self.config["db_url"])
+
+        self.wallets = Wallets(self.config, self.exchange)
+
+        PairLocks.timeframe = self.config["timeframe"]
+
+        self.trading_mode: TradingMode = self.config.get("trading_mode", TradingMode.SPOT)
+        self.margin_mode: MarginMode = self.config.get("margin_mode", MarginMode.NONE)
+        self.last_process: datetime | None = None
+
+        # RPC runs in separate threads, can start handling external commands just after
+        # initialization, even before Freqtradebot has a chance to start its throttling,
+        # so anything in the Freqtradebot instance should be ready (initialized), including
+        # the initial state of the bot.
+        # Keep this at the end of this initialization method.
+        self.rpc: RPCManager = RPCManager(self)
+
+        self.dataprovider = DataProvider(self.config, self.exchange, rpc=self.rpc)
+        self.pairlists = PairListManager(self.exchange, self.config, self.dataprovider)
+
+        self.dataprovider.add_pairlisthandler(self.pairlists)
+
+        # Attach Dataprovider to strategy instance
+        self.strategy.dp = self.dataprovider
+        # Attach Wallets to strategy instance
+        self.strategy.wallets = self.wallets
+
+      
+        # Init ExternalMessageConsumer if enabled
+        self.emc = (
+            ExternalMessageConsumer(self.config, self.dataprovider)
+            if self.config.get("external_message_consumer", {}).get("enabled", False)
+            else None
+        )
+
+        logger.info("Starting initial pairlist refresh")
+        with MeasureTime(
+            lambda duration, _: logger.info(f"Initial Pairlist refresh took {duration:.2f}s"), 0
+        ):
+            self.active_pair_whitelist = self._refresh_active_whitelist()
+
+        # Set initial bot state from config
+        initial_state:str =cast(str, self.config.get("initial_state"))
+        self.state = State[initial_state.upper()] if initial_state else State.STOPPED
+
+        # Protect exit-logic from forcesell and vice versa
+        self._exit_lock = Lock()
+        timeframe_secs = timeframe_to_seconds(self.strategy.timeframe)
+        self._exit_reason_cache = PeriodicCache(100, ttl=timeframe_secs)
+        LoggingMixin.__init__(self, logger, timeframe_secs)
+
+        self._schedule = Scheduler()
+
+        if self.trading_mode == TradingMode.FUTURES:
+
+            def update():
+                self.update_funding_fees()
+                self.update_all_liquidation_prices()
+                self.wallets.update()
+
+            # This would be more efficient if scheduled in utc time, and performed at each
+            # funding interval, specified by funding_fee_times on the exchange classes
+            # However, this reduces the precision - and might therefore lead to problems.
+            for time_slot in range(0, 24):
+                for minutes in [1, 31]:
+                    t = str(time(time_slot, minutes, 2))
+                    self._schedule.every().day.at(t).do(update)
+
+        self._schedule.every().day.at("00:02").do(self.exchange.ws_connection_reset)
+
+        self.strategy.ft_bot_start()
+        # Initialize protections AFTER bot start - otherwise parameters are not loaded.
+        self.protections = ProtectionManager(self.config, self.strategy.protections)
+        self.use_public_trades = self.config.get("exchange", {}).get("use_public_trades", False)
+        if not self.use_public_trades:
+            logger.info("Using public trades is disabled. ")
+        def log_took_too_long(duration: float, time_limit: float):
+            logger.warning(
+                f"Strategy analysis took {duration:.2f}s, more than 25% of the timeframe "
+                f"({time_limit:.2f}s). This can lead to delayed orders and missed signals."
+                "Consider either reducing the amount of work your strategy performs "
+                "or reduce the amount of pairs in the Pairlist."
+            )
+
+        self._measure_execution = MeasureTime(log_took_too_long, timeframe_secs * 0.25)
+
+        self.ohlcv_lock = asyncio.Lock()
+        self.trades_lock = asyncio.Lock()
+        self.pre_ohlcv_whitelist = set()
+        self.pre_trades_whitelist = set()
         
  
     # def log_once(self, message: str, logmethod: Callable, force_show: bool = False) -> None:
