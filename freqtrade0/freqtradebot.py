@@ -47,7 +47,8 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
     Freqtrade is the main class of the bot.
     This is from here the bot start its logic.
     """
-
+    def __init__(self, config: Config) -> None:
+        super().__init__(config)
  
     # def log_once(self, message: str, logmethod: Callable, force_show: bool = False) -> None:
     #     """
@@ -77,17 +78,6 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         res_pair_list = pairlist + informative_pairlist if informative_pairlist else pairlist
         return res_pair_list
 
-    # def _get_ohlcv_set(self):
-    #     informative_pairlist =self.strategy.gather_informative_pairs()
-    #     _pairs = self._getpairlist(informative_pairlist)
-    #     return set(_pairs)
-
-
-
-    # def _get_tradesset(self):
-    #     informative_pairlist =self.strategy.gather_informative_trade_pairs()
-    #     trade_pairs = self._getpairlist(informative_pairlist)
-    #     return set(trade_pairs)
 
   
 

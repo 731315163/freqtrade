@@ -78,6 +78,7 @@ def patch_RPCManager(mocker) -> MagicMock:
 
 
 
+
 def test_hedge_mode_trades_open(
     default_conf_usdt, ticker_usdt, fee, mocker, limit_buy_order_usdt_open, caplog
 ) -> None:
@@ -92,7 +93,9 @@ def test_hedge_mode_trades_open(
         get_fee=fee,
     )
     freqtrade = FreqtradeBot(default_conf_usdt)
-    patch_get_signal(freqtrade,enter_long=True,enter_short=True)
+    freqtrade.exchange.refresh_latest_ohlcv = lambda p: None
+    freqtrade.strategy.get_entry_signal = lambda pair, timeframe, analyzed_df :("long","L")
+   
 
     # Create 2 existing trades
     assert freqtrade.create_trade("ETH/USDT")
@@ -102,14 +105,48 @@ def test_hedge_mode_trades_open(
     assert len(Trade.get_open_trades()) == 2
     # Change order_id for new orders
     limit_buy_order_usdt_open["id"] = "123444"
-
+    freqtrade.strategy.get_entry_signal = lambda pair, timeframe, analyzed_df :("short","S")
     # Create 2 new trades using create_trades
-    assert freqtrade.create_trade("ETH/USDT",direction=TradeDirection.SHORT)
-    assert freqtrade.create_trade("NEO/BTC",direction=TradeDirection.SHORT)
+    assert freqtrade.create_trade("ETH/USDT")
+    assert freqtrade.create_trade("NEO/BTC")
 
     trades = Trade.get_open_trades()
     assert len(trades) == 4
 
+def test_hedge_mode_entryposition(
+    default_conf_usdt, ticker_usdt, fee, mocker, limit_buy_order_usdt_open, caplog
+) -> None:
+    
+    patch_RPCManager(mocker)
+    patch_exchange(mocker)
+    default_conf_usdt["max_open_trades"] = 4
+    mocker.patch.multiple(
+        EXMS,
+        fetch_ticker=ticker_usdt,
+        create_order=MagicMock(return_value=limit_buy_order_usdt_open),
+        get_fee=fee,
+    )
+    freqtrade = FreqtradeBot(default_conf_usdt)
+    freqtrade.exchange.refresh_latest_ohlcv = lambda p: None
+    freqtrade.strategy.get_entry_signal = lambda pair, timeframe, analyzed_df :("long","L")
+    freqtrade._get_nolock_whitelist=lambda can_hedge_mode:{"ETH/USDT":TradeDirection.NONE,"NEO/BTC":TradeDirection.NONE}
+
+    # Create 2 existing trades
+    assert freqtrade.create_trade("ETH/USDT")
+    assert freqtrade.create_trade("NEO/BTC")
+   
+
+    assert len(Trade.get_open_trades()) == 2
+    # Change order_id for new orders
+    limit_buy_order_usdt_open["id"] = "123444"
+    freqtrade.strategy.get_entry_signal = lambda pair, timeframe, analyzed_df :("short","S")
+    freqtrade._get_nolock_whitelist=lambda can_hedge_mode:{"ETH/USDT":TradeDirection.LONG,"NEO/BTC":TradeDirection.Long}
+    # Create 2 new trades using create_trades
+    assert freqtrade.create_trade("ETH/USDT")
+    assert freqtrade.create_trade("NEO/BTC")
+
+    trades = Trade.get_open_trades()
+    assert len(trades) == 4
 # Unit tests
 
 
