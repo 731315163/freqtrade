@@ -55,14 +55,14 @@ TRADE_SIDES = ("long", "short")
 EXMS = "freqtrade.exchange.exchange.Exchange"
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "--longrun",
-        action="store_true",
-        dest="longrun",
-        default=False,
-        help="Enable long-run tests (ccxt compat)",
-    )
+# def pytest_addoption(parser):
+#     parser.addoption(
+#         "--longrun",
+#         action="store_true",
+#         dest="longrun",
+#         default=False,
+#         help="Enable long-run tests (ccxt compat)",
+#     )
 
 
 def pytest_configure(config):
