@@ -479,15 +479,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#install-ta-lib" class="md-nav__link">
-    <span class="md-ellipsis">
-      Install ta-lib
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#error-during-installation-on-windows" class="md-nav__link">
     <span class="md-ellipsis">
       Error during installation on Windows
@@ -1738,15 +1729,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#install-ta-lib" class="md-nav__link">
-    <span class="md-ellipsis">
-      Install ta-lib
-    </span>
-  </a>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#error-during-installation-on-windows" class="md-nav__link">
     <span class="md-ellipsis">
       Error during installation on Windows
@@ -1810,26 +1792,6 @@ Otherwise, please follow the instructions below.</p>
 <div class="admonition hint">
 <p class="admonition-title">Hint</p>
 <p>Using the <a href="https://www.anaconda.com/distribution/">Anaconda Distribution</a> under Windows can greatly help with installation problems. Check out the <a href="../installation/#installation-with-conda">Anaconda installation section</a> in the documentation for more information.</p>
-</div>
-<h3 id="install-ta-lib">Install ta-lib<a class="headerlink" href="#install-ta-lib" title="Permanent link">&para;</a></h3>
-<p>Install ta-lib according to the <a href="https://github.com/TA-Lib/ta-lib-python#windows">ta-lib documentation</a>.</p>
-<p>As compiling from source on windows has heavy dependencies (requires a partial visual studio installation), Freqtrade provides these dependencies (in the binary wheel format) for the latest 3 Python versions (3.11, 3.12 and 3.13) and for 64bit Windows.
-These Wheels are also used by CI running on windows, and are therefore tested together with freqtrade.</p>
-<p>Other versions must be downloaded from the above link.</p>
-<div class="highlight"><pre><span></span><code><span class="nb">cd </span><span class="p">\</span><span class="n">path</span><span class="p">\</span><span class="n">freqtrade</span>
-<span class="n">python</span> <span class="n">-m</span> <span class="n">venv</span> <span class="p">.</span><span class="n">venv</span>
-<span class="p">.</span><span class="n">venv</span><span class="p">\</span><span class="n">Scripts</span><span class="p">\</span><span class="n">activate</span><span class="p">.</span><span class="n">ps1</span>
-<span class="c"># optionally install ta-lib from wheel</span>
-<span class="c"># Eventually adjust the below filename to match the downloaded wheel</span>
-<span class="n">pip</span> <span class="n">install</span> <span class="p">-</span><span class="n">-find-links</span> <span class="n">build_helpers</span><span class="p">\</span> <span class="n">TA-Lib</span> <span class="n">-U</span>
-<span class="n">pip</span> <span class="n">install</span> <span class="n">-r</span> <span class="n">requirements</span><span class="p">.</span><span class="n">txt</span>
-<span class="n">pip</span> <span class="n">install</span> <span class="n">-e</span> <span class="p">.</span>
-<span class="n">freqtrade</span>
-</code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Use Powershell</p>
-<p>The above installation script assumes you're using powershell on a 64bit windows.
-Commands for the legacy CMD windows console may differ.</p>
 </div>
 <h3 id="error-during-installation-on-windows">Error during installation on Windows<a class="headerlink" href="#error-during-installation-on-windows" title="Permanent link">&para;</a></h3>
 <div class="highlight"><pre><span></span><code>error:<span class="w"> </span>Microsoft<span class="w"> </span>Visual<span class="w"> </span>C++<span class="w"> </span><span class="m">14</span>.0<span class="w"> </span>is<span class="w"> </span>required.<span class="w"> </span>Get<span class="w"> </span>it<span class="w"> </span>with<span class="w"> </span><span class="s2">&quot;Microsoft Visual C++ Build Tools&quot;</span>:<span class="w"> </span>http://landinghub.visualstudio.com/visual-cpp-build-tools

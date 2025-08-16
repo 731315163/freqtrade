@@ -540,45 +540,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#install-ta-lib" class="md-nav__link">
-    <span class="md-ellipsis">
-      Install TA-Lib
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Install TA-Lib">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ta-lib-script-installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      TA-Lib script installation
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="TA-Lib script installation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ta-lib-manual-installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      TA-Lib manual installation
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#setup-python-virtual-environment-virtualenv" class="md-nav__link">
     <span class="md-ellipsis">
       Setup Python virtual environment (virtualenv)
@@ -2113,45 +2074,6 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#install-ta-lib" class="md-nav__link">
-    <span class="md-ellipsis">
-      Install TA-Lib
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="Install TA-Lib">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ta-lib-script-installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      TA-Lib script installation
-    </span>
-  </a>
-  
-    <nav class="md-nav" aria-label="TA-Lib script installation">
-      <ul class="md-nav__list">
-        
-          <li class="md-nav__item">
-  <a href="#ta-lib-manual-installation" class="md-nav__link">
-    <span class="md-ellipsis">
-      TA-Lib manual installation
-    </span>
-  </a>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-      </ul>
-    </nav>
-  
-</li>
-        
-          <li class="md-nav__item">
   <a href="#setup-python-virtual-environment-virtualenv" class="md-nav__link">
     <span class="md-ellipsis">
       Setup Python virtual environment (virtualenv)
@@ -2408,7 +2330,6 @@ While native installation is possible with some manual effort, this is not suppo
 <li><a href="https://pip.pypa.io/en/stable/installing/">pip</a></li>
 <li><a href="https://git-scm.com/book/en/v2/Getting-Started-Installing-Git">git</a></li>
 <li><a href="https://virtualenv.pypa.io/en/stable/installation.html">virtualenv</a> (Recommended)</li>
-<li><a href="https://ta-lib.github.io/ta-lib-python/">TA-Lib</a> (install instructions <a href="#install-ta-lib">below</a>)</li>
 </ul>
 <h3 id="install-code">Install code<a class="headerlink" href="#install-code" title="Permanent link">&para;</a></h3>
 <p>We've included/collected install instructions for Ubuntu, MacOS, and Windows. These are guidelines and your success may vary with other distros.
@@ -2531,28 +2452,6 @@ This option will hard reset your branch (only if you are on either `stable` or `
 <hr />
 <h2 id="manual-installation">Manual Installation<a class="headerlink" href="#manual-installation" title="Permanent link">&para;</a></h2>
 <p>Make sure you fulfill the <a href="#requirements">Requirements</a> and have downloaded the <a href="#freqtrade-repository">Freqtrade repository</a>.</p>
-<h3 id="install-ta-lib">Install TA-Lib<a class="headerlink" href="#install-ta-lib" title="Permanent link">&para;</a></h3>
-<h4 id="ta-lib-script-installation">TA-Lib script installation<a class="headerlink" href="#ta-lib-script-installation" title="Permanent link">&para;</a></h4>
-<div class="highlight"><pre><span></span><code>sudo<span class="w"> </span>./build_helpers/install_ta-lib.sh
-</code></pre></div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>This will use the ta-lib tar.gz included in this repository.</p>
-</div>
-<h5 id="ta-lib-manual-installation">TA-Lib manual installation<a class="headerlink" href="#ta-lib-manual-installation" title="Permanent link">&para;</a></h5>
-<p><a href="https://ta-lib.github.io/ta-lib-python/install.html">Official installation guide</a></p>
-<div class="highlight"><pre><span></span><code>wget<span class="w"> </span>http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-tar<span class="w"> </span>xvzf<span class="w"> </span>ta-lib-0.4.0-src.tar.gz
-<span class="nb">cd</span><span class="w"> </span>ta-lib
-sed<span class="w"> </span>-i.bak<span class="w"> </span><span class="s2">&quot;s|0.00000001|0.000000000000000001 |g&quot;</span><span class="w"> </span>src/ta_func/ta_utility.h
-./configure<span class="w"> </span>--prefix<span class="o">=</span>/usr/local
-make
-sudo<span class="w"> </span>make<span class="w"> </span>install
-<span class="c1"># On debian based systems (debian, ubuntu, ...) - updating ldconfig might be necessary.</span>
-sudo<span class="w"> </span>ldconfig<span class="w">  </span>
-<span class="nb">cd</span><span class="w"> </span>..
-rm<span class="w"> </span>-rf<span class="w"> </span>./ta-lib*
-</code></pre></div>
 <h3 id="setup-python-virtual-environment-virtualenv">Setup Python virtual environment (virtualenv)<a class="headerlink" href="#setup-python-virtual-environment-virtualenv" title="Permanent link">&para;</a></h3>
 <p>You will run freqtrade in separated <code>virtual environment</code></p>
 <div class="highlight"><pre><span></span><code><span class="c1"># create virtualenv in directory /freqtrade/.venv</span>
@@ -2617,13 +2516,6 @@ conda<span class="w"> </span>deactivate
 <div class="highlight"><pre><span></span><code>python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>pip
 python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
 python3<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
-</code></pre></div>
-<p>Patch conda libta-lib (Linux only)</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># Ensure that the environment is active!</span>
-conda<span class="w"> </span>activate<span class="w"> </span>freqtrade
-
-<span class="nb">cd</span><span class="w"> </span>build_helpers
-bash<span class="w"> </span>install_ta-lib.sh<span class="w"> </span><span class="si">${</span><span class="nv">CONDA_PREFIX</span><span class="si">}</span><span class="w"> </span>nosudo
 </code></pre></div>
 <p><a href="#you-are-ready">You are now ready</a> to run the bot.</p>
 <h3 id="important-shortcuts">Important shortcuts<a class="headerlink" href="#important-shortcuts" title="Permanent link">&para;</a></h3>

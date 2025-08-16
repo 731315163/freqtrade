@@ -1880,7 +1880,7 @@ back to a previous backtest output, you need to supply the <code>--export-filena
 You can supply the same parameter to <code>backtest-analysis</code> with the name of the final backtest
 output file. This allows you to keep historical versions of backtest results and re-analyse
 them at a later date:</p>
-<div class="highlight"><pre><span></span><code>freqtrade<span class="w"> </span>backtesting<span class="w"> </span>-c<span class="w"> </span>&lt;config.json&gt;<span class="w"> </span>--timeframe<span class="w"> </span>&lt;tf&gt;<span class="w"> </span>--strategy<span class="w"> </span>&lt;strategy_name&gt;<span class="w"> </span>--timerange<span class="o">=</span>&lt;timerange&gt;<span class="w"> </span>--export<span class="o">=</span>signals<span class="w"> </span>--export-filename<span class="o">=</span>/tmp/mystrat_backtest.json
+<div class="highlight"><pre><span></span><code>freqtrade<span class="w"> </span>backtesting-analysis<span class="w"> </span>-c<span class="w"> </span>&lt;config.json&gt;<span class="w"> </span>--timeframe<span class="w"> </span>&lt;tf&gt;<span class="w"> </span>--strategy<span class="w"> </span>&lt;strategy_name&gt;<span class="w"> </span>--timerange<span class="o">=</span>&lt;timerange&gt;<span class="w"> </span>--export<span class="o">=</span>signals<span class="w"> </span>--export-filename<span class="o">=</span>user_data/backtest-results/backtest-result-2025-03-05_20-38-34.zip
 </code></pre></div>
 <p>You should see some output similar to below in the logs with the name of the timestamped
 filename that was exported:</p>
