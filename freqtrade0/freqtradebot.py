@@ -16,6 +16,7 @@ from schedule import Scheduler
 import freqtrade.freqtradebot
 from freqtrade.configuration import validate_config_consistency
 from freqtrade.constants import Config, ExchangeConfig
+from freqtrade.data.dataprovider import DataProvider
 from freqtrade.enums import (
     ExitCheckTuple,
     ExitType,
@@ -39,7 +40,9 @@ from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 from freqtrade.util import FtPrecise, MeasureTime, PeriodicCache, dt_now
 from freqtrade.wallets import Wallets
 from freqtrade0.enums import TradeDirection
+from freqtrade0.resolvers import ExchangeResolver, StrategyResolver
 from freqtrade0.strategy import IStrategy
+
 
 logger = freqtrade.freqtradebot.logger
 class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
@@ -68,7 +71,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             self.strategy :IStrategy= StrategyResolver.create_strategy(strategy_type=strategy_type,config=self.config)
         else:
             self.strategy :IStrategy=cast(IStrategy, StrategyResolver.load_strategy(self.config))
-
+        self.strategy.bot = self
         # Check config consistency here since strategies can set certain options
         try:
             validate_config_consistency(config)
@@ -170,7 +173,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         self.trades_lock = asyncio.Lock()
         self.pre_ohlcv_whitelist = set()
         self.pre_trades_whitelist = set()
-        
+
  
     # def log_once(self, message: str, logmethod: Callable, force_show: bool = False) -> None:
     #     """
@@ -384,7 +387,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
             )
             stake_available = self.wallets.get_available_stake_amount()
             self.log_once(f"Calling adjust_trade_position for pair {trade.pair}",logger.info)
-            stake_amount, price,order_tag = self.strategy._adjust_trade_position_internal(
+            orders = self.strategy._adjust_trade_position_internal(
                 trade=trade,
                 current_time=datetime.now(UTC),
                 current_rate=current_entry_rate,
@@ -396,63 +399,63 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 current_entry_profit=current_profit,
                 current_exit_profit=current_exit_profit,profit_struc=current_entry_profit_struc
             )
+            for stake_amount, price,order_tag in orders:
+                if stake_amount is not None and stake_amount > 0.0:
+                    if self.state == State.PAUSED:
+                        logger.debug("Position adjustment aborted because the bot is in PAUSED state")
+                        continue
 
-            if stake_amount is not None and stake_amount > 0.0:
-                if self.state == State.PAUSED:
-                    logger.debug("Position adjustment aborted because the bot is in PAUSED state")
-                    return
+                    # We should increase our position
+                    if self.strategy.max_entry_position_adjustment > -1:
+                        count_of_entries = trade.nr_of_successful_entries
+                        if count_of_entries > self.strategy.max_entry_position_adjustment:
+                            logger.debug(f"Max adjustment entries for {trade.pair} has been reached.")
+                            continue
+                        else:
+                            logger.debug("Max adjustment entries is set to unlimited.")
 
-                # We should increase our position
-                if self.strategy.max_entry_position_adjustment > -1:
-                    count_of_entries = trade.nr_of_successful_entries
-                    if count_of_entries > self.strategy.max_entry_position_adjustment:
-                        logger.debug(f"Max adjustment entries for {trade.pair} has been reached.")
-                        return
-                    else:
-                        logger.debug("Max adjustment entries is set to unlimited.")
+                    self.execute_entry(
+                        trade.pair,
+                        stake_amount=stake_amount,
+                        price=price,
+                        trade=trade,
+                        is_short=trade.is_short,
+                        mode="pos_adjust",
+                        enter_tag=order_tag,
+                    )
 
-                self.execute_entry(
-                    trade.pair,
-                    stake_amount=stake_amount,
-                    price=price,
-                    trade=trade,
-                    is_short=trade.is_short,
-                    mode="pos_adjust",
-                    enter_tag=order_tag,
-                )
+                if stake_amount is not None and stake_amount < 0.0:
+                    # We should decrease our position
+                    amount = self.exchange.amount_to_contract_precision(
+                        trade.pair,
+                        abs(
+                            float(
+                                FtPrecise(stake_amount)
+                                * FtPrecise(trade.amount)
+                                / FtPrecise(trade.stake_amount)
+                            )
+                        ),
+                    )
 
-            if stake_amount is not None and stake_amount < 0.0:
-                # We should decrease our position
-                amount = self.exchange.amount_to_contract_precision(
-                    trade.pair,
-                    abs(
-                        float(
-                            FtPrecise(stake_amount)
-                            * FtPrecise(trade.amount)
-                            / FtPrecise(trade.stake_amount)
+                    if amount == 0.0:
+                        logger.info(
+                            f"Wanted to exit of {stake_amount} amount, "
+                            "but exit amount is now 0.0 due to exchange limits - not exiting."
                         )
-                    ),
-                )
+                        continue
 
-                if amount == 0.0:
-                    logger.info(
-                        f"Wanted to exit of {stake_amount} amount, "
-                        "but exit amount is now 0.0 due to exchange limits - not exiting."
+                    remaining = (trade.amount - amount) * price
+                    if min_exit_stake and remaining != 0 and remaining < min_exit_stake:
+                        logger.info(
+                            f"Remaining amount of {remaining} would be smaller "
+                            f"than the minimum of {min_exit_stake}."
+                        )
+                        continue
+
+                    self.execute_trade_exit(
+                        trade,
+                        price,
+                        exit_check=ExitCheckTuple(exit_type=ExitType.PARTIAL_EXIT),
+                        sub_trade_amt=amount,
+                        exit_tag=order_tag,
                     )
-                    return
-
-                remaining = (trade.amount - amount) * price
-                if min_exit_stake and remaining != 0 and remaining < min_exit_stake:
-                    logger.info(
-                        f"Remaining amount of {remaining} would be smaller "
-                        f"than the minimum of {min_exit_stake}."
-                    )
-                    return
-
-                self.execute_trade_exit(
-                    trade,
-                    price,
-                    exit_check=ExitCheckTuple(exit_type=ExitType.PARTIAL_EXIT),
-                    sub_trade_amt=amount,
-                    exit_tag=order_tag,
-                )

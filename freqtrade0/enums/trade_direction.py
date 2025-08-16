@@ -1,4 +1,4 @@
-from enum import  IntFlag
+from enum import IntFlag
 
 from freqtrade.enums import MarketDirection, SignalDirection
 

@@ -15,6 +15,7 @@ from freqtrade.enums import (
 )
 from freqtrade.exceptions import OperationalException, StrategyError
 from freqtrade.exchange import timeframe_to_minutes
+from freqtrade.freqtradebot import FreqtradeBot
 from freqtrade.misc import remove_entry_exit_signals
 from freqtrade.persistence import Trade
 from freqtrade.strategy.informative_decorator import (
@@ -49,7 +50,7 @@ class IStrategy(strategy.IStrategy):
         self.config = config
         # Dict to determine if analysis is necessary
         self._last_candle_seen_per_pair: dict[str, datetime] = {}
-        super().__init__(config)
+        self.bot :FreqtradeBot= None
 
         # Gather informative pairs from @informative-decorated methods.
         self._ft_informative: list[tuple[InformativeData, PopulateIndicators]] = []
@@ -282,12 +283,12 @@ class IStrategy(strategy.IStrategy):
         current_entry_profit: float,
         current_exit_profit: float,
         **kwargs,
-    ) -> tuple[float | None, float,str]:
+    ) -> list[tuple[float | None, float,str]]:
         """
         wrapper around adjust_trade_position to handle the return value
         profit_struc in kwargs 参数是所有成交顶订单的总利润，不只是剩余订单的利润，原版位剩余订单利润，请注意
         """
-        resp = strategy_safe_wrapper(
+        _ordersORresp = strategy_safe_wrapper(
             self.adjust_trade_position, default_retval=(None,current_rate, ""), supress_error=True
         )(
             trade=trade,
@@ -302,7 +303,10 @@ class IStrategy(strategy.IStrategy):
             current_exit_profit=current_exit_profit,
             **kwargs,
         )
-        resp_tuple = resp if isinstance(resp, tuple) else (resp,)
+        if not isinstance(_ordersORresp, list):
+            _orders = [_ordersORresp]
+    
+       
         def def_price(stake_amount:float|None):
             if stake_amount is None:
                 return 0.0
@@ -310,18 +314,21 @@ class IStrategy(strategy.IStrategy):
                 return current_exit_rate
             else:
                 return current_entry_rate
-        match resp_tuple:
-            case (stake_amount, price, order_tag):
-                result=( stake_amount, price, order_tag)
-            case (stake_amount, price_or_tag):
-                if isinstance(price_or_tag, str):
-                    result=(stake_amount, def_price(stake_amount) , price_or_tag)
-                else:
-                    result=(stake_amount, price_or_tag, "")
-            case (stake_amount, ):
-                result=( stake_amount, def_price( stake_amount), "")
-            case _:
-                return None
+        result =[]
+        for resp in _orders:
+            resp_tuple = resp if isinstance(resp, tuple) else (resp,)
+            match resp_tuple:
+                case (stake_amount, price, order_tag):
+                    result.append( stake_amount, price, order_tag)
+                case (stake_amount, price_or_tag):
+                    if isinstance(price_or_tag, str):
+                        result.append(stake_amount, def_price(stake_amount) , price_or_tag)
+                    else:
+                        result.append(stake_amount, price_or_tag, "")
+                case (stake_amount, ):
+                    result.append( stake_amount, def_price( stake_amount), "")
+                case _:
+                    continue
         return result
     def get_latest_candle(
         self,
