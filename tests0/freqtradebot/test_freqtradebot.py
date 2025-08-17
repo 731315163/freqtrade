@@ -147,6 +147,50 @@ def test_hedge_mode_entryposition(
 
     trades = Trade.get_open_trades()
     assert len(trades) == 4
+
+
+def test_check_and_call_adjust_trade_position_hedge(mocker, default_conf_usdt, fee, caplog) -> None:
+    default_conf_usdt.update(
+        {
+            "position_adjustment_enable": True,
+            "max_entry_position_adjustment": 0,
+        }
+    )
+    freqtrade = get_patched_freqtradebot(mocker, default_conf_usdt)
+    buy_rate_mock = MagicMock(return_value=10)
+    mocker.patch.multiple(
+        EXMS,
+        get_rate=buy_rate_mock,
+        fetch_ticker=MagicMock(return_value={"bid": 10, "ask": 12, "last": 11}),
+        get_min_pair_stake_amount=MagicMock(return_value=1),
+        get_fee=fee,
+    )
+    create_mock_trades(fee)
+    caplog.set_level(logging.DEBUG)
+    freqtrade.strategy.adjust_trade_position = MagicMock(return_value=[(10, "aaaa"),(10,"bbbb")])
+    freqtrade.process_open_trade_positions()
+    assert log_has_re(r"Max adjustment entries for .* has been reached\.", caplog)
+    assert freqtrade.strategy.adjust_trade_position.call_count == 4
+
+   
+    freqtrade.strategy.adjust_trade_position = MagicMock(return_value=(-0.0005, "partial_exit_c"))
+    freqtrade.process_open_trade_positions()
+    assert log_has_re(r"LIMIT_SELL has been fulfilled.*", caplog)
+    assert freqtrade.strategy.adjust_trade_position.call_count == 4
+    trade = Trade.get_trades(trade_filter=[Trade.id == 5]).first()
+    assert trade.orders[-1].ft_order_tag == "partial_exit_c"
+    assert trade.is_open
+
+
+
+
+
+
+
+
+
+
+
 # Unit tests
 
 
