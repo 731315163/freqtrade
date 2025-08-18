@@ -16,13 +16,15 @@ from freqtrade.configuration.config_validation import validate_migrated_strategy
 from freqtrade.constants import REQUIRED_ORDERTIF, REQUIRED_ORDERTYPES, USERPATH_STRATEGIES, Config
 from freqtrade.enums import TradingMode
 from freqtrade.exceptions import OperationalException
-from freqtrade0.strategy import IStrategy
 from freqtrade.resolvers.iresolver import IResolver
-from freqtrade.resolvers.strategy_resolver import check_override,warn_deprecated_setting
+from freqtrade0.strategy import IStrategy
+
+
 logger = logging.getLogger(__name__)
 
 
 class StrategyResolver(IResolver):
+
     """
     This class contains the logic to load custom strategy class
     """
@@ -32,45 +34,12 @@ class StrategyResolver(IResolver):
     user_subdir = USERPATH_STRATEGIES
     initial_search_path = None
     extra_path = "strategy_path"
-
-    @staticmethod
-    def load_strategy(config: Config | None = None) -> IStrategy:
-        """
-        Load the custom class from config parameter
-        :param config: configuration dictionary or None
-        """
-        config = config or {}
-
-        if not config.get("strategy"):
-            raise OperationalException(
-                "No strategy set. Please use `--strategy` to specify the strategy class to use."
-            )
-
-        strategy_name = config["strategy"]
-        strategy: IStrategy = StrategyResolver._load_strategy(
-            strategy_name, config=config, extra_dir=config.get("strategy_path")
-        )
-        return StrategyResolver.init_strategy(strategy,config)
-    @staticmethod
-    def create_strategy( strategy_type: type, config: Config|None= None):
-        """
-        Load the custom class from config parameter
-        :param config: configuration dictionary or None
-        """
-        config = config or {}
-        strategy: IStrategy = strategy_type(config)
-        return StrategyResolver.init_strategy(strategy,config)
-        
-   
-
-   
-
     @staticmethod
     def init_strategy(strategy:IStrategy,config:Config):
         strategy.ft_load_params_from_file()
         # Set attributes
         # Check if we need to override configuration
-        #             (Attribute name,                    default,     subkey)
+        # (Attribute name, default, subkey)
         attributes = [
             ("minimal_roi", {"0": 10.0}),
             ("timeframe", None),
@@ -106,8 +75,43 @@ class StrategyResolver(IResolver):
                 logger.info("Strategy using %s: %s", attribute, config[attribute])
 
         StrategyResolver._normalize_attributes(strategy)
+
         StrategyResolver._strategy_sanity_validations(strategy)
         return strategy
+
+    @staticmethod
+    def create_strategy( strategy_type: type, config: Config|None= None):
+        """
+        Load the custom class from config parameter
+        :param config: configuration dictionary or None
+        """
+        config = config or {}
+        strategy: IStrategy = strategy_type(config)
+        return StrategyResolver.init_strategy(strategy,config)
+
+
+    @staticmethod
+    def load_strategy(config: Config | None = None) -> IStrategy:
+        """
+        Load the custom class from config parameter
+        :param config: configuration dictionary or None
+        """
+        config = config or {}
+
+        if not config.get("strategy"):
+            raise OperationalException(
+                "No strategy set. Please use `--strategy` to specify the strategy class to use."
+            )
+
+        strategy_name = config["strategy"]
+        strategy: IStrategy = StrategyResolver._load_strategy(
+            strategy_name, config=config, extra_dir=config.get("strategy_path")
+        )
+        return StrategyResolver.init_strategy(strategy,config)
+#custom end
+
+
+
     @staticmethod
     def _override_attribute_helper(strategy, config: Config, attribute: str, default: Any):
         """
@@ -140,6 +144,7 @@ class StrategyResolver(IResolver):
         elif default is not None:
             setattr(strategy, attribute, default)
             config[attribute] = default
+
     @staticmethod
     def _normalize_attributes(strategy: IStrategy) -> IStrategy:
         """
@@ -320,6 +325,23 @@ class StrategyResolver(IResolver):
             f"Impossible to load Strategy '{strategy_name}'. This class does not exist "
             "or contains Python code errors."
         )
+
+
+def warn_deprecated_setting(strategy: IStrategy, old: str, new: str, error=False):
+    if hasattr(strategy, old):
+        errormsg = f"DEPRECATED: Using '{old}' moved to '{new}'."
+        if error:
+            raise OperationalException(errormsg)
+        logger.warning(errormsg)
+        setattr(strategy, new, getattr(strategy, f"{old}"))
+
+
+def check_override(obj, parentclass, attribute: str):
+    """
+    Checks if a object overrides the parent class attribute.
+    :returns: True if the object is overridden.
+    """
+    return getattr(type(obj), attribute) != getattr(parentclass, attribute)
 
 
 

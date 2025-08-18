@@ -42,36 +42,14 @@ class IStrategy(strategy.IStrategy):
         timeframe -> str: value of the timeframe to use with the strategy
     """
 
-   
+
     can_short: bool = True
     can_hedge_mode: bool = True
-    
-    def __init__(self, config: Config) -> None:
-        self.config = config
-        # Dict to determine if analysis is necessary
-        self._last_candle_seen_per_pair: dict[str, datetime] = {}
-        self.bot :FreqtradeBot= None
 
-        # Gather informative pairs from @informative-decorated methods.
-        self._ft_informative: list[tuple[InformativeData, PopulateIndicators]] = []
-        for attr_name in dir(self.__class__):
-            cls_method = getattr(self.__class__, attr_name)
-            if not callable(cls_method):
-                continue
-            informative_data_list = getattr(cls_method, "_ft_informative", None)
-            if not isinstance(informative_data_list, list):
-                # Type check is required because mocker would return a mock object that evaluates to
-                # True, confusing this code.
-                continue
-            strategy_timeframe_minutes = timeframe_to_minutes(self.timeframe)
-            for informative_data in informative_data_list:
-                if timeframe_to_minutes(informative_data.timeframe) < strategy_timeframe_minutes:
-                    raise OperationalException(
-                        "Informative timeframe must be equal or higher than strategy timeframe!"
-                    )
-                if not informative_data.candle_type:
-                    informative_data.candle_type = config["candle_type_def"]
-                self._ft_informative.append((informative_data, cls_method))
+    def __init__(self, config: Config) -> None:
+        self.bot :FreqtradeBot= None
+        super().__init__(config)
+
     def informative_trade_pairs(self) -> ListPairsWithTimeframes:
         """
         Define additional, informative pair/interval combinations to be cached from the exchange.

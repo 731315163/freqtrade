@@ -11,9 +11,9 @@ from freqtrade.strategy import (
     BooleanParameter,
     DecimalParameter,
     IntParameter,
-    IStrategy,
     RealParameter,
 )
+from freqtrade0.strategy.interface import IStrategy
 
 
 class StrategyTestV3(IStrategy):
@@ -26,7 +26,7 @@ class StrategyTestV3(IStrategy):
     """
 
     INTERFACE_VERSION = 3
-
+    can_short = False
     # Minimal ROI designed for the strategy
     minimal_roi = {"40": 0.0, "30": 0.01, "20": 0.02, "0": 0.04}
 

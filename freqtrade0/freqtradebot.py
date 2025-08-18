@@ -204,14 +204,6 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         return res_pair_list
 
 
-  
-
-
-
-
-
-
-
     def _get_nolock_whitelist(self,can_hedge_mode: bool=False) -> dict[str,TradeDirection]:
         """
         获取非锁定状态下的白名单 若存在全局锁定则返回空列表或 None。
