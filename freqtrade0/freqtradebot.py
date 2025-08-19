@@ -169,10 +169,6 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
 
         self._measure_execution = MeasureTime(log_took_too_long, timeframe_secs * 0.25)
 
-        self.ohlcv_lock = asyncio.Lock()
-        self.trades_lock = asyncio.Lock()
-        self.pre_ohlcv_whitelist = set()
-        self.pre_trades_whitelist = set()
 
  
     # def log_once(self, message: str, logmethod: Callable, force_show: bool = False) -> None:

@@ -13,14 +13,12 @@ from freqtrade.constants import Config, ListPairsWithTimeframes
 from freqtrade.enums import (
     CandleType,
 )
-from freqtrade.exceptions import OperationalException, StrategyError
+from freqtrade.exceptions import StrategyError
 from freqtrade.exchange import timeframe_to_minutes
 from freqtrade.freqtradebot import FreqtradeBot
 from freqtrade.misc import remove_entry_exit_signals
 from freqtrade.persistence import Trade
 from freqtrade.strategy.informative_decorator import (
-    InformativeData,
-    PopulateIndicators,
     _format_pair_name,
 )
 from freqtrade.strategy.interface import logger, remove_entry_exit_signals
@@ -28,7 +26,6 @@ from freqtrade.strategy.strategy_validation import StrategyResultValidator
 from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 from freqtrade.util import dt_now
 from freqtrade.util.datetime_helpers import dt_now
-from freqtrade0.enums import LoopMode
 
 
 class IStrategy(strategy.IStrategy):
@@ -122,7 +119,9 @@ class IStrategy(strategy.IStrategy):
         price: float | None
         signal_name: str
         '''
+        
         pass
+
 
 
     def _loop_entry(
@@ -264,6 +263,7 @@ class IStrategy(strategy.IStrategy):
     ) -> list[tuple[float | None, float,str]]:
         """
         wrapper around adjust_trade_position to handle the return value
+        可以返回多个订单，包括(stake_amount,price,tag) ,stake_amount,或者list 多个订单
         profit_struc in kwargs 参数是所有成交顶订单的总利润，不只是剩余订单的利润，原版位剩余订单利润，请注意
         """
         _ordersORresp = strategy_safe_wrapper(
@@ -281,10 +281,8 @@ class IStrategy(strategy.IStrategy):
             current_exit_profit=current_exit_profit,
             **kwargs,
         )
-        if not isinstance(_ordersORresp, list):
-            _orders = [_ordersORresp]
-    
-       
+        _orders =_ordersORresp if  isinstance(_ordersORresp, list) else [_ordersORresp]
+
         def def_price(stake_amount:float|None):
             if stake_amount is None:
                 return 0.0
@@ -297,14 +295,14 @@ class IStrategy(strategy.IStrategy):
             resp_tuple = resp if isinstance(resp, tuple) else (resp,)
             match resp_tuple:
                 case (stake_amount, price, order_tag):
-                    result.append( stake_amount, price, order_tag)
+                    result.append( (stake_amount, price, order_tag))
                 case (stake_amount, price_or_tag):
                     if isinstance(price_or_tag, str):
-                        result.append(stake_amount, def_price(stake_amount) , price_or_tag)
+                        result.append((stake_amount, def_price(stake_amount) , price_or_tag))
                     else:
-                        result.append(stake_amount, price_or_tag, "")
+                        result.append((stake_amount, price_or_tag, ""))
                 case (stake_amount, ):
-                    result.append( stake_amount, def_price( stake_amount), "")
+                    result.append(( stake_amount, def_price( stake_amount), ""))
                 case _:
                     continue
         return result
