@@ -20,7 +20,7 @@
       
       
       <link rel="icon" href="../images/logo.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.16">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.17">
     
     
       
@@ -2080,6 +2080,7 @@ To learn how to get data for the pairs and exchange you're interested in, head o
                              [--strategy-list STRATEGY_LIST [STRATEGY_LIST ...]]
                              [--export {none,trades,signals}]
                              [--backtest-filename PATH]
+                             [--backtest-directory PATH]
                              [--breakdown {day,week,month,year} [{day,week,month,year} ...]]
                              [--cache {none,day,week,month}]
                              [--freqai-backtest-live-models] [--notes TEXT]
@@ -2128,7 +2129,13 @@ options:
                         Export backtest results (default: trades).
   --backtest-filename PATH, --export-filename PATH
                         Use this filename for backtest results.Example:
-                        `--backtest-filename=user_data/backtest_results/`
+                        `--backtest-
+                        filename=backtest_results_2020-09-27_16-20-48.json`.
+                        Assumes either `user_data/backtest_results/` or
+                        `--export-directory` as base directory.
+  --backtest-directory PATH, --export-directory PATH
+                        Directory to use for backtest results. Example:
+                        `--export-directory=user_data/backtest_results/`.
   --breakdown {day,week,month,year} [{day,week,month,year} ...]
                         Show backtesting breakdown per [day, week, month,
                         year].
@@ -2229,7 +2236,7 @@ You can then use this data for backtesting as follows:</p>
 <p>Only use this if you're sure you'll not want to plot or analyze your results further.</p>
 <hr />
 <p>Exporting trades to file specifying a custom directory</p>
-<div class="highlight"><pre><span></span><code>freqtrade<span class="w"> </span>backtesting<span class="w"> </span>--strategy<span class="w"> </span>backtesting<span class="w"> </span>--export<span class="w"> </span>trades<span class="w"> </span>--export-filename<span class="o">=</span>user_data/custom-backtest-results
+<div class="highlight"><pre><span></span><code>freqtrade<span class="w"> </span>backtesting<span class="w"> </span>--strategy<span class="w"> </span>backtesting<span class="w"> </span>--export<span class="w"> </span>trades<span class="w"> </span>--backtest-directory<span class="o">=</span>user_data/custom-backtest-results
 </code></pre></div>
 <hr />
 <p>Please also read about the <a href="../strategy-customization/#strategy-startup-period">strategy startup period</a>.</p>
@@ -2796,10 +2803,10 @@ Your next step is to learn <a href="../hyperopt/">how to find optimal parameters
     
     
       
-      <script id="__config" type="application/json">{"base": "..", "features": ["content.code.annotate", "search.share", "content.code.copy", "content.action.edit", "navigation.top", "navigation.footer"], "search": "../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": ["content.code.annotate", "search.share", "content.code.copy", "content.action.edit", "navigation.top", "navigation.footer"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "provider": "mike"}}</script>
     
     
-      <script src="../assets/javascripts/bundle.50899def.min.js"></script>
+      <script src="../assets/javascripts/bundle.92b07e13.min.js"></script>
       
         <script src="../javascripts/config.js"></script>
       
