@@ -19,7 +19,7 @@ tradebot = Runer(
 
 
 if __name__ == '__main__':
-    # download_file(userdata=userd, down_since=datetime(2023, 1, 1))
+    tradebot.download(start_date=datetime(2023, 1, 1),configpath=userd, )
     # test()
     # tradebot.backtesting(start=start,end=end,timeframe=strategy[1])
     tradebot.webserver(configpath=userd / "config.json")

@@ -33,10 +33,10 @@ RUN cd /tmp && /tmp/install_ta-lib.sh && rm -r /tmp/*ta-lib*
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Install dependencies
-COPY --chown=ftuser:ftuser requirements.txt requirements-hyperopt.txt /freqtrade/
+COPY --chown=ftuser:ftuser requirements.txt requirements-hedge.txt /freqtrade/
 USER ftuser
 RUN  pip install --user --no-cache-dir "numpy<3.0" \
-  && pip install --user --no-cache-dir -r requirements-hyperopt.txt
+  && pip install --user --no-cache-dir -r requirements-hedge.txt
 
 # Copy dependencies to runtime-image
 FROM base AS runtime-image
