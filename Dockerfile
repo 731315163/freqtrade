@@ -23,7 +23,7 @@ WORKDIR /freqtrade
 # Install dependencies
 FROM base AS python-deps
 RUN  apt-get update \
-  && apt-get -y install build-essential libssl-dev git libffi-dev libgfortran5 pkg-config cmake gcc \
+  && apt-get -y install build-essential libssl-dev git libffi-dev libgfortran5 pkg-config cmake gcc git\
   && apt-get clean \
   && pip install --upgrade pip wheel
 
@@ -33,10 +33,10 @@ RUN cd /tmp && /tmp/install_ta-lib.sh && rm -r /tmp/*ta-lib*
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Install dependencies
-COPY --chown=ftuser:ftuser requirements.txt requirements-hyperopt.txt /freqtrade/
+COPY --chown=ftuser:ftuser requirements.txt requirements-hedge.txt /freqtrade/
 USER ftuser
 RUN  pip install --user --no-cache-dir "numpy<3.0" \
-  && pip install --user --no-cache-dir -r requirements-hyperopt.txt
+  && pip install --user --no-cache-dir -r requirements-hedge.txt
 
 # Copy dependencies to runtime-image
 FROM base AS runtime-image

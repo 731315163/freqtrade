@@ -1,10 +1,7 @@
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from line_profiler import profile
-
-from freqtradeutil.download import download_file
-from freqtradeutil.tradebot import TradeBot, hp
+from freqtrade0 import Runer
  
 userd = Path.cwd() / "user_data"
 start = datetime(2025, 1, 1)
@@ -13,7 +10,7 @@ end = datetime(2025, 1, 10)
 strategy =("MartingaleStrategy",timedelta(minutes=5))
 # strategy =("RSIMartingaleStrategy",timedelta(minutes=5))
 # strategy =("Pin_Strtegy",timedelta(minutes=1))
-tradebot = TradeBot( 
+tradebot = Runer( 
     user_data_path=userd,
     strategy_name=strategy[0],
     timeframe=strategy[1],
@@ -22,7 +19,7 @@ tradebot = TradeBot(
 
 
 if __name__ == '__main__':
-    # download_file(userdata=userd, down_since=datetime(2023, 1, 1))
+    tradebot.download(start_date=datetime(2023, 1, 1),configpath=userd, )
     # test()
     # tradebot.backtesting(start=start,end=end,timeframe=strategy[1])
     tradebot.webserver(configpath=userd / "config.json")

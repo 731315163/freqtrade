@@ -6,6 +6,7 @@ Dockerfile.armhf
 docker/
 .coveragerc
 .eggs
+.venv
 .github
 .pylintrc
 .travis.yml
