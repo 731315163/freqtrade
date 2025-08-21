@@ -118,15 +118,14 @@ class Runer:
             else:
                 ret[index] = str(v)
         return ret
-  
-       
 
-    def trade(self,cls:type|None=None, confp=None):
+
+    def trade(self,strategy_type:type|None=None, confp=None):
         if confp is None:
             confp = self.configpath
         commandlist=        self.add_basecommands(["trade"],strategyorname=self.strategy_name)
         args = self.get_arguments(commandlist)
-     
+
         def term_handler(signum, frame):
             # Raise KeyboardInterrupt - so we can handle it in the same way as Ctrl-C
             raise KeyboardInterrupt()
@@ -136,7 +135,7 @@ class Runer:
         try:
             signal.signal(signal.SIGTERM, term_handler)
             
-            self.worker = Worker(args, strategy= cls or self.strategy)
+            self.worker = Worker(args, strategy= strategy_type or self.strategy)
             self.worker.run()
         finally:
             if self.worker:

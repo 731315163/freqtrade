@@ -4,8 +4,11 @@ This module defines the interface to apply for strategies
 """
 
 from datetime import UTC, datetime, timedelta
+from re import match
 from typing import Literal
 
+import pandas as pd
+from numpy import long
 from pandas import DataFrame
 
 from freqtrade import strategy
@@ -13,8 +16,11 @@ from freqtrade.constants import Config, ListPairsWithTimeframes
 from freqtrade.enums import (
     CandleType,
 )
+from freqtrade.enums.signaltype import SignalDirection, SignalTagType, SignalType
+from freqtrade.enums.tradingmode import TradingMode
 from freqtrade.exceptions import StrategyError
 from freqtrade.exchange import timeframe_to_minutes
+from freqtrade.exchange.exchange_utils_timeframe import timeframe_to_seconds
 from freqtrade.freqtradebot import FreqtradeBot
 from freqtrade.misc import remove_entry_exit_signals
 from freqtrade.persistence import Trade
@@ -26,6 +32,7 @@ from freqtrade.strategy.strategy_validation import StrategyResultValidator
 from freqtrade.strategy.strategy_wrapper import strategy_safe_wrapper
 from freqtrade.util import dt_now
 from freqtrade.util.datetime_helpers import dt_now
+from freqtrade0.enums import TradeDirection
 
 
 class IStrategy(strategy.IStrategy):
@@ -109,52 +116,52 @@ class IStrategy(strategy.IStrategy):
 
 
 
-    def loop_entry(self,pair:str,timestamp:datetime) ->None| tuple[Literal["long","short"],float|None]|tuple[Literal["long","short"],float|None,float|None|str]|tuple[Literal["long","short"],float|None,float|None,str]:
+    # def loop_entry(self,pair:str,timestamp:datetime) ->None| tuple[Literal["long","short"],float|None]|tuple[Literal["long","short"],float|None,float|None|str]|tuple[Literal["long","short"],float|None,float|None,str]:
 
-        '''
-        return tuple[Literal["long","short"]|None,float|None,float|None,str|None]|None:
-        return a tuple of (side,amount,price,signal_name)|None for the entry signal
-        *side: "long" or "short",If the side is none, no action will be performed.
-        stack: float | None
-        price: float | None
-        signal_name: str
-        '''
+    #     '''
+    #     return tuple[Literal["long","short"]|None,float|None,float|None,str|None]|None:
+    #     return a tuple of (side,amount,price,signal_name)|None for the entry signal
+    #     *side: "long" or "short",If the side is none, no action will be performed.
+    #     stack: float | None
+    #     price: float | None
+    #     signal_name: str
+    #     '''
         
-        pass
+    #     pass
 
 
 
-    def _loop_entry(
-        self,pair:str,timestamp:datetime,
-        df :DataFrame|None,
-        **kwargs
-    ) -> tuple[Literal["long","short"]|None,float|None,float|None,str|None]|None:
-        """
-        wrapper around adjust_trade_position to handle the return value
-        """
-        # lastes,latest_time= self.get_latest_candle(pair,self.timeframe,df)
-        resp = strategy_safe_wrapper(
-            self.loop_entry, default_retval=(None, ""), supress_error=True
-        )(
-           pair = pair,timestamp = timestamp,
-            **kwargs
-        )
+    # def _loop_entry(
+    #     self,pair:str,timestamp:datetime,
+    #     df :DataFrame|None,
+    #     **kwargs
+    # ) -> tuple[Literal["long","short"]|None,float|None,float|None,str|None]|None:
+    #     """
+    #     wrapper around adjust_trade_position to handle the return value
+    #     """
+    #     # lastes,latest_time= self.get_latest_candle(pair,self.timeframe,df)
+    #     resp = strategy_safe_wrapper(
+    #         self.loop_entry, default_retval=(None, ""), supress_error=True
+    #     )(
+    #        pair = pair,timestamp = timestamp,
+    #         **kwargs
+    #     )
 
-        result = None
-        match resp:
-            case (side, stake_amount, price, order_tag):
-                result=( side, stake_amount, price, order_tag)
-            case (side, stake_amount, price_or_tag):
-                if isinstance(price_or_tag, str):
-                    result=( side, stake_amount, None, price_or_tag)
-                else:
-                    result=( side, stake_amount, price_or_tag, "")
-            case (side, stake_amount):
-                result=( side, stake_amount, None, "")
-            case _:
-                return None
+    #     result = None
+    #     match resp:
+    #         case (side, stake_amount, price, order_tag):
+    #             result=( side, stake_amount, price, order_tag)
+    #         case (side, stake_amount, price_or_tag):
+    #             if isinstance(price_or_tag, str):
+    #                 result=( side, stake_amount, None, price_or_tag)
+    #             else:
+    #                 result=( side, stake_amount, price_or_tag, "")
+    #         case (side, stake_amount):
+    #             result=( side, stake_amount, None, "")
+    #         case _:
+    #             return None
 
-        return result
+    #     return result
 
     def populate_all(self, dataframes:dict[str,tuple[ DataFrame,bool]], **kwargs) ->dict[str,tuple[ DataFrame,bool]]:
         return dataframes
@@ -245,7 +252,68 @@ class IStrategy(strategy.IStrategy):
                 dataframe,new_candle =result
                 pair_data[pair]=( dataframe,new_candle)
         pair_data = self._analyze_all_signals(dataframes=pair_data,candle_type=candle_type)
+    def get_entry_signal(
+        self,
+        pair: str,
+        timeframe: str,
+        dataframe: DataFrame,
+    ) -> tuple[TradeDirection | None, str | tuple|None]:
+        """
+        双向持仓大量修改
+        Calculates current entry signal based based on the dataframe signals
+        columns of the dataframe.
+        Used by Bot to get the signal to enter trades.
+        :param pair: pair in format ANT/BTC
+        :param timeframe: timeframe to use
+        :param dataframe: Analyzed dataframe to get signal from.
+        :return: (SignalDirection, entry_tag)
+        """
+        latest, latest_date = self.get_latest_candle(pair, timeframe, dataframe)
+        if latest is None or latest_date is None:
+            return None, None
 
+        enter_long = latest.get(SignalType.ENTER_LONG.value, 0) == 1
+        exit_long = latest.get(SignalType.EXIT_LONG.value, 0) == 1
+        enter_short = latest.get(SignalType.ENTER_SHORT.value, 0) == 1
+        exit_short = latest.get(SignalType.EXIT_SHORT.value, 0) == 1
+
+        enter_signal: TradeDirection  = TradeDirection.NONE
+        long_enter_tag: str | None = None
+        short_enter_tag: str | None = None
+        if enter_long == 1 and not any([exit_long]):
+            enter_signal = enter_signal| TradeDirection.LONG
+            long_enter_tag = latest.get(SignalTagType.ENTER_TAG.value, None)
+        if (
+            self.config.get("trading_mode", TradingMode.SPOT) != TradingMode.SPOT
+            and self.can_short
+            and enter_short == 1
+            and not any([exit_short])
+        ):
+            enter_signal =enter_signal | TradeDirection.SHORT
+            short_enter_tag = latest.get(SignalTagType.ENTER_TAG.value, None)
+
+     
+
+        timeframe_seconds = timeframe_to_seconds(timeframe)
+
+        if self.ignore_expired_candle(
+            latest_date=latest_date,
+            current_time=dt_now(),
+            timeframe_seconds=timeframe_seconds,
+            enter=bool(enter_signal),
+        ):
+            return None, None
+        match enter_signal:
+            case TradeDirection.BOTH:
+                enter_tag = (long_enter_tag, short_enter_tag)
+            case TradeDirection.LONG:
+                enter_tag = long_enter_tag
+            case TradeDirection.SHORT:
+                enter_tag = short_enter_tag
+            case _:
+                enter_tag = None
+            
+        return enter_signal, enter_tag
 
     def _adjust_trade_position_internal(
         self,
@@ -306,41 +374,41 @@ class IStrategy(strategy.IStrategy):
                 case _:
                     continue
         return result
-    def get_latest_candle(
-        self,
-        pair: str,
-        timeframe: str,
-        dataframe: DataFrame,
-    ) -> tuple[DataFrame | None, datetime | None]:
-        """
-        保留此函数，修复其不在istrtegy中就出现outdated history 错误
-        Calculates current signal based based on the entry order or exit order
-        columns of the dataframe.
-        Used by Bot to get the signal to enter, or exit
-        :param pair: pair in format ANT/BTC
-        :param timeframe: timeframe to use
-        :param dataframe: Analyzed dataframe to get signal from.
-        :return: (None, None) or (Dataframe, latest_date) - corresponding to the last candle
-        """
-        if not isinstance(dataframe, DataFrame) or dataframe.empty:
-            logger.error(f"Empty candle (OHLCV) data for pair {pair}")
-            return None, None
+    # def get_latest_candle(
+    #     self,
+    #     pair: str,
+    #     timeframe: str,
+    #     dataframe: DataFrame,
+    # ) -> tuple[DataFrame | None, datetime | None]:
+    #     """
+    #     保留此函数，修复其不在istrtegy中就出现outdated history 错误
+    #     Calculates current signal based based on the entry order or exit order
+    #     columns of the dataframe.
+    #     Used by Bot to get the signal to enter, or exit
+    #     :param pair: pair in format ANT/BTC
+    #     :param timeframe: timeframe to use
+    #     :param dataframe: Analyzed dataframe to get signal from.
+    #     :return: (None, None) or (Dataframe, latest_date) - corresponding to the last candle
+    #     """
+    #     if not isinstance(dataframe, DataFrame) or dataframe.empty:
+    #         logger.error(f"Empty candle (OHLCV) data for pair {pair}")
+    #         return None, None
 
-        try:
-            latest_date_pd = dataframe["date"].max()
-            latest = dataframe.loc[dataframe["date"] == latest_date_pd].iloc[-1]
-        except Exception as e:
-            logger.error(f"Unable to get latest candle (OHLCV) data for pair {pair} - {e}")
-            return None, None
-        # Explicitly convert to datetime object to ensure the below comparison does not fail
-        latest_date: datetime = latest_date_pd.to_pydatetime()
-
-        # Check if dataframe is out of date
-        timeframe_minutes = timeframe_to_minutes(timeframe)
-        offset = self.config.get("exchange", {}).get("outdated_offset", 2)
-        if latest_date < (dt_now() - timedelta(minutes=timeframe_minutes * 2 + offset)):
-            logger.critical(
-                f"Outdated history for {pair} pair. Last tick is {int((dt_now() - latest_date).total_seconds() // 60)} minutes old"
-                            )
-            return None, None
-        return latest, latest_date
+     
+    #     latest_date_pd = dataframe["date"].max()
+        
+    #     latest = dataframe.loc[dataframe["date"] == latest_date_pd].iloc[-1]
+    #     # except Exception as e:
+    #     #     logger.error(f"Unable to get latest candle (OHLCV) data for pair {pair} - {e}")
+    #     #     return None, None
+    #     # Explicitly convert to datetime object to ensure the below comparison does not fail
+    #     latest_date: datetime = latest_date_pd.to_pydatetime()
+    #     # Check if dataframe is out of date
+    #     timeframe_minutes = timeframe_to_minutes(timeframe)
+    #     offset = self.config.get("exchange", {}).get("outdated_offset", 2)
+    #     if latest_date < (dt_now() - timedelta(minutes=timeframe_minutes * 2 + offset)):
+    #         logger.critical(
+    #             f"Outdated history for {pair} pair. Last tick is {int((dt_now() - latest_date).total_seconds() // 60)} minutes old"
+    #                         )
+    #         return None, None
+    #     return latest, latest_date

@@ -218,6 +218,123 @@ def test_check_and_call_adjust_trade_position_orders_hedge(mocker, default_conf_
 
 
 
+@pytest.mark.parametrize("is_short,open_rate", [(False, 2.0), (True, 2.2)])
+def test_create_trade(
+    default_conf_usdt, ticker_usdt, limit_order, fee, mocker, is_short, open_rate
+) -> None:
+    send_msg_mock = patch_RPCManager(mocker)
+    patch_exchange(mocker)
+    mocker.patch.multiple(
+        EXMS,
+        fetch_ticker=ticker_usdt,
+        get_fee=fee,
+        _dry_is_price_crossed=MagicMock(return_value=False),
+    )
+
+    # Save state of current whitelist
+    whitelist = deepcopy(default_conf_usdt["exchange"]["pair_whitelist"])
+    freqtrade = FreqtradeBot(default_conf_usdt)
+    patch_get_signal(freqtrade, enter_short=is_short, enter_long=not is_short)
+    send_msg_mock.reset_mock()
+    freqtrade.create_trade("ETH/USDT")
+
+    trade = Trade.session.scalars(select(Trade)).first()
+    trade.is_short = is_short
+    assert trade is not None
+    assert pytest.approx(trade.stake_amount) == 60.0
+    assert trade.is_open
+    assert trade.open_date is not None
+    assert trade.exchange == "binance"
+
+    # Simulate fulfilled LIMIT_BUY order for trade
+    oobj = Order.parse_from_ccxt_object(
+        limit_order[entry_side(is_short)], "ADA/USDT", entry_side(is_short)
+    )
+    trade.update_trade(oobj)
+    assert send_msg_mock.call_count == 1
+    entry_msg = send_msg_mock.call_args_list[0][0][0]
+    assert entry_msg["type"] == RPCMessageType.ENTRY
+    assert entry_msg["stake_amount"] == trade.stake_amount
+    assert entry_msg["stake_currency"] == default_conf_usdt["stake_currency"]
+    assert entry_msg["pair"] == "ETH/USDT"
+    assert entry_msg["direction"] == ("Short" if is_short else "Long")
+    assert entry_msg["sub_trade"] is False
+
+    assert trade.open_rate == open_rate
+    assert trade.amount == 30.0
+
+    assert whitelist == default_conf_usdt["exchange"]["pair_whitelist"]
+
+
+def test_create_trade_no_stake_amount(default_conf_usdt, ticker_usdt, fee, mocker) -> None:
+    patch_RPCManager(mocker)
+    patch_exchange(mocker)
+    patch_wallet(mocker, free=default_conf_usdt["stake_amount"] * 0.5)
+    mocker.patch.multiple(
+        EXMS,
+        fetch_ticker=ticker_usdt,
+        get_fee=fee,
+    )
+    freqtrade = FreqtradeBot(default_conf_usdt)
+    patch_get_signal(freqtrade)
+
+    with pytest.raises(DependencyException, match=r".*stake amount.*"):
+        freqtrade.create_trade("ETH/USDT")
+
+
+@pytest.mark.parametrize("is_short", [False, True])
+@pytest.mark.parametrize(
+    "stake_amount,create,amount_enough,max_open_trades",
+    [
+        (5.0, True, True, 99),
+        (0.042, True, False, 99),  # Amount will be adjusted to min - which is 0.051
+        (0, False, True, 99),
+        (UNLIMITED_STAKE_AMOUNT, False, True, 0),
+    ],
+)
+def test_create_trade_minimal_amount(
+    default_conf_usdt,
+    ticker_usdt,
+    limit_order_open,
+    fee,
+    mocker,
+    stake_amount,
+    create,
+    amount_enough,
+    max_open_trades,
+    caplog,
+    is_short,
+) -> None:
+    patch_RPCManager(mocker)
+    patch_exchange(mocker)
+    enter_mock = MagicMock(return_value=limit_order_open[entry_side(is_short)])
+    mocker.patch.multiple(
+        EXMS,
+        fetch_ticker=ticker_usdt,
+        create_order=enter_mock,
+        get_fee=fee,
+    )
+    default_conf_usdt["max_open_trades"] = max_open_trades
+    freqtrade = FreqtradeBot(default_conf_usdt)
+    freqtrade.config["stake_amount"] = stake_amount
+    patch_get_signal(freqtrade, enter_short=is_short, enter_long=not is_short)
+
+    if create:
+        assert freqtrade.create_trade("ETH/USDT")
+        if amount_enough:
+            rate, amount = enter_mock.call_args[1]["rate"], enter_mock.call_args[1]["amount"]
+            assert rate * amount <= default_conf_usdt["stake_amount"]
+        else:
+            assert log_has_re(r"Stake amount for pair .* is too small.*", caplog)
+    else:
+        assert not freqtrade.create_trade("ETH/USDT")
+        if not max_open_trades:
+            assert (
+                freqtrade.wallets.get_trade_stake_amount(
+                    "ETH/USDT", default_conf_usdt["max_open_trades"]
+                )
+                == 0
+            )
 
 
 

@@ -81,6 +81,42 @@ dependencies = [
   "optuna==4.4.0",
   "cmaes==0.12.0",
   "mathematics",
+  "plotly==6.2.0",
+  "catboost==1.2.8 ; 'arm' not in platform_machine",
+  "lightgbm==4.6.0",
+  "xgboost==3.0.2",
+  "tensorboard==2.20.0",
+  "datasieve==0.1.9",
+  "torch==2.7.1 ; platform_machine != 'x86_64' or sys_platform != 'darwin'",
+  "gymnasium==0.29.1",
+  "stable-baselines3==2.7.0 ; platform_machine != 'x86_64' or sys_platform != 'darwin'",
+  "sb3-contrib>=2.2.1",
+  "tqdm==4.67.1",
+  "markdown==3.8.2",
+  "mkdocs==1.6.1",
+  "mkdocs-material==9.6.16",
+  "mdx-truly-sane-lists==1.3",
+  "pymdown-extensions==10.16",
+  "mike==2.1.3",
+  "ruff==0.12.5",
+  "mypy==1.17.0",
+  "pre-commit==4.2.0",
+  "pytest==8.4.1",
+  "pytest-asyncio==1.1.0",
+  "pytest-cov==6.2.1",
+  "pytest-mock==3.14.1",
+  "pytest-random-order==1.2.0",
+  "pytest-timeout==2.4.0",
+  "pytest-xdist==3.8.0",
+  "isort==6.0.1",
+  "time-machine==2.16.0",
+  "nbconvert==7.16.6",
+  "scipy-stubs==1.16.0.2",
+  "types-cachetools==6.1.0.20250717",
+  "types-filelock==3.2.7",
+  "types-requests==2.32.4.20250611",
+  "types-tabulate==0.9.0.20241207",
+  "types-python-dateutil==2.9.0.20250708",
 ]
 
 [project.optional-dependencies]
@@ -240,7 +276,7 @@ pythonVersion = "3.9"
 typeCheckingMode = "off"
 # analyzeUnannotatedFunctions = false
 
-reportArgumentType = false  # 155
+reportArgumentType = true  # 155
 reportAssignmentType = false  # 12
 reportAttributeAccessIssue = false  # 255
 reportCallIssue = false  # 23
@@ -248,14 +284,14 @@ reportGeneralTypeIssues = false  # 48
 reportIncompatibleMethodOverride = false  # 15
 reportIncompatibleVariableOverride = false  # 5
 reportIndexIssue = false  # 22
-reportMissingImports = false  # 5
-reportOperatorIssue = false  # 7
+reportMissingImports = true  # 5
+reportOperatorIssue = true  # 7
 reportOptionalMemberAccess = false  # 35
 reportOptionalOperand = false  # 7
 reportPossiblyUnboundVariable = false  # 36
 reportPrivateImportUsage = false  # 5
 reportRedeclaration = false  # 1
-reportReturnType = false  # 28
+reportReturnType = true  # 28
 reportTypedDictNotRequiredAccess = false  # 27
 
 

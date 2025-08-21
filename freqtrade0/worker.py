@@ -3,23 +3,23 @@ Main Freqtrade worker class.
 """
 
 import asyncio
-from datetime import datetime, timedelta
 import time
 import traceback
 from collections.abc import Callable
+from datetime import datetime, timedelta
 from os import getpid
 from typing import Any, Coroutine, overload
 
-from numpy import isin
 import sdnotify
 from janus import T
+from numpy import isin
 
 from freqtrade import __version__, worker
-from freqtrade0.freqtradebot import FreqtradeBot
 from freqtrade.configuration import Configuration
 from freqtrade.constants import PROCESS_THROTTLE_SECS, RETRY_TIMEOUT, Config
 from freqtrade.enums import RPCMessageType, State
 from freqtrade.exceptions import OperationalException, TemporaryError
+from freqtrade0.freqtradebot import FreqtradeBot
 
 
 logger = worker.logger
@@ -70,8 +70,14 @@ class Worker(worker.Worker):
  
 
     
-    
     def run(self) -> None:
+        state = None
+        while True:
+            state = self._worker(old_state=state)
+            if state == State.RELOAD_CONFIG:
+                self._reconfigure()
+    #TODO
+    def async_run(self) -> None:
         try:
           asyncio.run(self.gather(),debug=True)
         except asyncio.CancelledError as e:

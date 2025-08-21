@@ -8,8 +8,10 @@ from copy import deepcopy
 from datetime import UTC, datetime, time, timedelta
 from threading import Lock
 from typing import cast
+from unittest import case
 
 import jsonschema
+import pandas as pd
 from pandas import DataFrame
 from schedule import Scheduler
 
@@ -261,8 +263,9 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
  
 
 
-    def create_trade(self, pair: str,*,direction:TradeDirection=TradeDirection.NONE,df:DataFrame|None =None) -> bool:
+    def create_trade(self, pair: str,*,notrade_direction:TradeDirection=TradeDirection.NONE,df:DataFrame|None =None):
         """
+        修改为双向持仓逻辑
         Check the implemented trading strategy for entry signals.
 
         If the pair triggers the enter signal a new trade record gets created
@@ -270,43 +273,57 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
 
         :return: True if a trade has been created.
         """
-
-        if df is not None and df.empty == False:
+        
+        if df is not None and not df.empty :
             analyzed_df = df
+        
         else:
             analyzed_df, _ = self.dataprovider.get_analyzed_dataframe(pair, self.strategy.timeframe)
         # nowtime = analyzed_df.iloc[-1]["date"] if len(analyzed_df) > 0 else None
-
-
-
+           # try:
+        #交易次数
+        num = 0
         # running get_signal on historical data fetched
         #价格或交易都可以直接返回none
-        signal, enter_tag = self.strategy.get_entry_signal(
+        signals, enter_tag = self.strategy.get_entry_signal(
             pair, self.strategy.timeframe, analyzed_df
         )
-        if  signal is None  or TradeDirection.convert(signal) & direction > TradeDirection.NONE :
-            return False
+        if  signals is None or signals==TradeDirection.NONE or (signals & notrade_direction) > TradeDirection.NONE :
+            return num
         stake_amount = self.wallets.get_trade_stake_amount(
             pair, self.config["max_open_trades"]
         )
         bid_check_dom = self.config.get("entry_pricing", {}).get("check_depth_of_market", {})
-        if (bid_check_dom.get("enabled", False)) and (
-            bid_check_dom.get("bids_to_ask_delta", 0) > 0
-        ):
-            if self._check_depth_of_market(pair, bid_check_dom, side=signal):
-                return self.execute_entry(
-                    pair,
-                    stake_amount=stake_amount,
-                    enter_tag=enter_tag,
-                    is_short=(signal == SignalDirection.SHORT),
-                )
+        def _execute_entry(signal,enter_tag:str|None):
+            if (bid_check_dom.get("enabled", False)) and (bid_check_dom.get("bids_to_ask_delta", 0) > 0):
+                if self._check_depth_of_market(pair, bid_check_dom, side=signal):
+                    if self.execute_entry(
+                        pair,
+                        stake_amount=stake_amount,
+                        enter_tag=enter_tag,
+                        is_short=(signal == SignalDirection.SHORT),
+                    ):
+                        return 1
             else:
-                return False
 
+                if self.execute_entry(
+                    pair=pair, stake_amount=stake_amount ,enter_tag=enter_tag, is_short=(signal == SignalDirection.SHORT)
+                ):
+                    return 1
+            return 0
+        
+        match signals:
+            case TradeDirection.BOTH:
+                num+= _execute_entry(SignalDirection.LONG,enter_tag[0])
+                num+= _execute_entry(SignalDirection.SHORT,enter_tag[1])
+            case TradeDirection.LONG:
+                num+= _execute_entry(SignalDirection.LONG,enter_tag)
+            case TradeDirection.SHORT:
+                num+= _execute_entry(SignalDirection.SHORT,enter_tag)
+            case _:
+                raise ValueError(f"Invalid trade direction: {signals}")
+        return num
 
-        return self.execute_entry(
-            pair=pair, stake_amount=stake_amount ,enter_tag=enter_tag, is_short=(signal == SignalDirection.SHORT)
-        )
 
     def enter_positions(self) -> int:
         whitelist = self._get_nolock_whitelist(can_hedge_mode=True)
@@ -331,7 +348,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                         break
 
                     with self._exit_lock:
-                            trades_created_ohlc += self.create_trade(pair,direction= direction,df=analyzed_df)
+                            trades_created_ohlc += self.create_trade(pair,notrade_direction= direction,df=analyzed_df)
                 except DependencyException as exception:
                     logger.warning("Unable to create trade for %s: %s", pair, exception)
 
