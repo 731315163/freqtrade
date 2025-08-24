@@ -9,7 +9,7 @@ start = datetime(2025, 1, 1)
 end = datetime(2025, 1, 10)
 
 # strategy =("MartingaleStrategy",timedelta(minutes=5))
-strategy =("Grid",timedelta(minutes=5))
+strategy =("Grid",timedelta(minutes=1))
 # strategy =("Pin_Strtegy",timedelta(minutes=1))
 tradebot = Runer( 
     user_data_path=userd,
@@ -22,7 +22,7 @@ tradebot = Runer(
 if __name__ == '__main__':
     # tradebot.download(start_date=datetime(2023, 1, 1),configpath=userd )
     tradebot.trade()
-   
+
     # test()
 
     # tradebot.backtesting(start=start,end=end,timeframe=strategy[1])

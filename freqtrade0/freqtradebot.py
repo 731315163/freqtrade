@@ -15,7 +15,9 @@ import pandas as pd
 from pandas import DataFrame
 from schedule import Scheduler
 
+from freqtrade.exchange.exchange_types import CcxtOrder
 import freqtrade.freqtradebot
+from freqtrade import constants
 from freqtrade.configuration import validate_config_consistency
 from freqtrade.constants import Config, ExchangeConfig
 from freqtrade.data.dataprovider import DataProvider
@@ -27,13 +29,13 @@ from freqtrade.enums import (
     State,
     TradingMode,
 )
-from freqtrade.exceptions import DependencyException
+from freqtrade.exceptions import DependencyException, InsufficientFundsError
 from freqtrade.exchange import timeframe_to_seconds
 from freqtrade.exchange.exchange import Exchange
 from freqtrade.mixins import LoggingMixin
 from freqtrade.persistence import PairLocks, Trade, init_db
 from freqtrade.persistence.models import PairLock
-from freqtrade.persistence.trade_model import ProfitStruct
+from freqtrade.persistence.trade_model import Order, ProfitStruct
 from freqtrade.plugins.pairlistmanager import PairListManager
 from freqtrade.plugins.protectionmanager import ProtectionManager
 from freqtrade.rpc import RPCManager
@@ -288,7 +290,10 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         signals, enter_tag = self.strategy.get_entry_signal(
             pair, self.strategy.timeframe, analyzed_df
         )
-        if  signals is None or signals==TradeDirection.NONE or (signals & notrade_direction) > TradeDirection.NONE :
+        if  signals is  None :
+            return num
+        signals = (TradeDirection.BOTH ^ notrade_direction)&signals
+        if signals==TradeDirection.NONE :
             return num
         stake_amount = self.wallets.get_trade_stake_amount(
             pair, self.config["max_open_trades"]
@@ -404,6 +409,14 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 current_entry_profit=current_profit,
                 current_exit_profit=current_exit_profit,profit_struc=current_entry_profit_struc
             )
+            #   cancel open orders of this trade if order is different
+            self.cancel_open_orders_of_trade(
+                trade,
+                [trade.entry_side, trade.exit_side],
+                constants.CANCEL_REASON["REPLACE"],
+                True,
+            )
+            Trade.commit()
             for stake_amount, price,order_tag in orders:
                 if stake_amount is not None and stake_amount > 0.0:
                     if self.state == State.PAUSED:
@@ -464,3 +477,59 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                         sub_trade_amt=amount,
                         exit_tag=order_tag,
                     )
+ 
+    def handle_similar_open_order(
+        self, trade: Trade, price: float, amount: float, side: str
+    ) -> bool:
+        """
+        Keep existing open order if same amount and side otherwise cancel
+        :param trade: Trade object of the trade we're analyzing
+        :param price: Limit price of the potential new order
+        :param amount: Quantity of assets of the potential new order
+        :param side: Side of the potential new order
+        :return: True if an existing similar order was found
+        """
+        if trade.has_open_orders:
+            oo = trade.select_order(side, True)
+            if oo is not None:
+                if price == oo.price and side == oo.side and amount == oo.amount:
+                    logger.info(
+                        f"A similar open order was found for {trade.pair}. "
+                        f"Keeping existing {trade.exit_side} order. {price=},  {amount=}"
+                    )
+                    return True
+            # cancel open orders of this trade if order is different
+            # self.cancel_open_orders_of_trade(
+            #     trade,
+            #     [trade.entry_side, trade.exit_side],
+            #     constants.CANCEL_REASON["REPLACE"],
+            #     True,
+            # )
+            # Trade.commit()
+            return False
+
+        return False
+    def handle_cancel_order(
+        self, order: CcxtOrder, order_obj: Order, trade: Trade, reason: str, replacing: bool = False
+    ) -> bool:
+        """
+        Check if current analyzed order timed out and cancel if necessary.
+        :param order: Order dict grabbed with exchange.fetch_order()
+        :param order_obj: Order object from the database.
+        :param trade: Trade object.
+        :return: True if the order was canceled, False otherwise.
+        """
+        if order["side"] == trade.entry_side:
+            return self.handle_cancel_enter(trade, order, order_obj, reason, replacing)
+        else:
+            canceled = self.handle_cancel_exit(trade, order, order_obj, reason)
+            # if not replacing:
+            #     canceled_count = trade.get_canceled_exit_order_count()
+            #     max_timeouts = self.config.get("unfilledtimeout", {}).get("exit_timeout_count", 0)
+            #     if canceled and max_timeouts > 0 and canceled_count >= max_timeouts:
+            #         logger.warning(
+            #             f"Emergency exiting trade {trade}, as the exit order "
+            #             f"timed out {max_timeouts} times. force selling {order['amount']}."
+            #         )
+            #         self.emergency_exit(trade, order["price"], order["amount"])
+            return canceled

@@ -185,7 +185,7 @@ Documentation = "https://freqtrade.io"
 
 
 [project.scripts]
-freqtrade = "freqtrade.main:main"
+freqtrade = "freqtrade0.main:main"
 
 [tool.setuptools]
 include-package-data = true
@@ -201,7 +201,7 @@ namespaces = true
 version = {attr = "freqtrade.__version__"}
 
 [tool.black]
-line-length = 100
+line-length = 128
 exclude = '''
 (
   /(

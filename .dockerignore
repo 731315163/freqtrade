@@ -1,4 +1,5 @@
 .git
+.git/
 .gitignore
 Dockerfile
 Dockerfile.armhf
@@ -7,6 +8,7 @@ docker/
 .coveragerc
 .eggs
 .venv
+.venv/
 .github
 .pylintrc
 .travis.yml
@@ -24,3 +26,6 @@ user_data
 .vscode
 .mypy_cache
 .ipynb_checkpoints
+tradesv3.dryrun.sqlite
+tradesv3.dryrun.sqlite-shm
+tradesv3.dryrun.sqlite-wal
