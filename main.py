@@ -9,7 +9,7 @@ start = datetime(2025, 1, 1)
 end = datetime(2025, 1, 10)
 
 # strategy =("MartingaleStrategy",timedelta(minutes=5))
-strategy =("Grid",timedelta(minutes=5))
+strategy =("Grid",timedelta(minutes=1))
 # strategy =("Pin_Strtegy",timedelta(minutes=1))
 tradebot = Runer( 
     user_data_path=userd,
