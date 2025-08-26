@@ -311,15 +311,21 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
                 ):
                     return 1
             return 0
-        
+        long_tag = None
+        short_tag = None
+        if isinstance(enter_tag,tuple) or isinstance(enter_tag,list):
+            long_tag = enter_tag[0]
+            if len(enter_tag)>1:
+                short_tag = short_tag[1]
+
         match signals:
             case TradeDirection.BOTH:
-                num+= _execute_entry(SignalDirection.LONG,enter_tag[0])
-                num+= _execute_entry(SignalDirection.SHORT,enter_tag[1])
+                num+= _execute_entry(SignalDirection.LONG,long_tag)
+                num+= _execute_entry(SignalDirection.SHORT,short_tag)
             case TradeDirection.LONG:
-                num+= _execute_entry(SignalDirection.LONG,enter_tag)
+                num+= _execute_entry(SignalDirection.LONG,long_tag)
             case TradeDirection.SHORT:
-                num+= _execute_entry(SignalDirection.SHORT,enter_tag)
+                num+= _execute_entry(SignalDirection.SHORT,short_tag)
             case _:
                 raise ValueError(f"Invalid trade direction: {signals}")
         return num

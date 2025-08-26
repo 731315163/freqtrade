@@ -22,7 +22,7 @@ tradebot = Runer(
 if __name__ == '__main__':
     # tradebot.download(start_date=datetime(2023, 1, 1),configpath=userd )
     tradebot.trade()
-   
+
     # test()
 
     # tradebot.backtesting(start=start,end=end,timeframe=strategy[1])
