@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from freqtrade0 import Runer
-
+from user_data.strategies.trend_pin import TrendPinStrategy
 
 userd = Path.cwd() / "user_data"
 start = datetime(2025, 1, 1)
@@ -10,7 +10,7 @@ end = datetime(2025, 1, 10)
 
 # strategy =("MartingaleStrategy",timedelta(minutes=5))
 strategy =("Grid",timedelta(minutes=1))
-# strategy =("Pin_Strtegy",timedelta(minutes=1))
+# strategy =("TrendPinStrategy",timedelta(minutes=1))
 tradebot = Runer( 
     user_data_path=userd,
     strategy_name=strategy[0],

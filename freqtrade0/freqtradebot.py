@@ -321,7 +321,7 @@ class FreqtradeBot(freqtrade.freqtradebot.FreqtradeBot):
         if isinstance(enter_tag,tuple) or isinstance(enter_tag,list):
             long_tag = enter_tag[0]
             if len(enter_tag)>1:
-                short_tag = short_tag[1]
+                short_tag = enter_tag[1]
 
         match signals:
             case TradeDirection.BOTH:
