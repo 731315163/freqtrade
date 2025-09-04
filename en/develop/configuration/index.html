@@ -20,7 +20,7 @@
       
       
       <link rel="icon" href="../images/logo.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.17">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.18">
     
     
       
@@ -3695,8 +3695,8 @@ refer to <a href="../stoploss/">the stoploss documentation</a>.</p>
 <p>If stoploss on exchange creation fails for some reason, then an "emergency exit" is initiated. By default, this will exit the trade using a market order. The order-type for the emergency-exit can be changed by setting the <code>emergency_exit</code> value in the <code>order_types</code> dictionary - however, this is not advised.</p>
 </div>
 <h3 id="understand-order_time_in_force">Understand order_time_in_force<a class="headerlink" href="#understand-order_time_in_force" title="Permanent link">&para;</a></h3>
-<p>The <code>order_time_in_force</code> configuration parameter defines the policy by which the order
-is executed on the exchange. Three commonly used time in force are:</p>
+<p>The <code>order_time_in_force</code> configuration parameter defines the policy by which the order is executed on the exchange.<br />
+Commonly used time in force are:</p>
 <p><strong>GTC (Good Till Canceled):</strong></p>
 <p>This is most of the time the default time in force. It means the order will remain
 on exchange till it is cancelled by the user. It can be fully or partially fulfilled.
@@ -3709,10 +3709,11 @@ is automatically cancelled by the exchange.</p>
 <p><strong>PO (Post only):</strong></p>
 <p>Post only order. The order is either placed as a maker order, or it is canceled.
 This means the order must be placed on orderbook for at least time in an unfilled state.</p>
+<p>Please check the <a href="../exchanges/">Exchange documentation</a> for supported time in force values for your exchange.</p>
 <h4 id="time_in_force-config">time_in_force config<a class="headerlink" href="#time_in_force-config" title="Permanent link">&para;</a></h4>
 <p>The <code>order_time_in_force</code> parameter contains a dict with entry and exit time in force policy values.
 This can be set in the configuration file or in the strategy.
-Values set in the configuration file overwrites values set in the strategy.</p>
+Values set in the configuration file overwrite values from in the strategy, following the regular <a href="#configuration-option-prevalence">precedence rules</a>.</p>
 <p>The possible values are: <code>GTC</code> (default), <code>FOK</code> or <code>IOC</code>.</p>
 <div class="highlight"><pre><span></span><code><span class="s2">&quot;order_time_in_force&quot;</span><span class="p">:</span> <span class="p">{</span>
     <span class="s2">&quot;entry&quot;</span><span class="p">:</span> <span class="s2">&quot;GTC&quot;</span><span class="p">,</span>
@@ -3721,8 +3722,7 @@ Values set in the configuration file overwrites values set in the strategy.</p>
 </code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
-<p>This is ongoing work. For now, it is supported only for binance, gate and kucoin.
-Please don't change the default value unless you know what you are doing and have researched the impact of using different values for your particular exchange.</p>
+<p>Please don't change the default value unless you know what you are doing and have researched the impact of using different values for your particular exchange.</p>
 </div>
 <h3 id="fiat-conversion">Fiat conversion<a class="headerlink" href="#fiat-conversion" title="Permanent link">&para;</a></h3>
 <p>Freqtrade uses the Coingecko API to convert the coin value to it's corresponding fiat value for the Telegram reports.
